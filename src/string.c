@@ -107,6 +107,7 @@ void string_reset(string_t *obj)
 {
   if (obj == NULL) return;
   free(obj->data);
+  obj->data = NULL;
   obj->length = 0;
   obj->capacity = 0;
 }

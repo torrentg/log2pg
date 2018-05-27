@@ -29,12 +29,26 @@
 #include <libpq-fe.h>
 
 /**************************************************************************//**
+ * @brief Types of database connection status.
+ */
+typedef enum {
+  DB_STATUS_UNINITIALIZED = 0, // Database not initialized.
+  DB_STATUS_CONNECTED,         // Database connected + no transaction in progress.
+  DB_STATUS_TRANSACTION,       // Database connected + transaction in progress.
+  DB_STATUS_ERRCON             // Database connection error (can be connected or not).
+} db_status_e;
+
+/**************************************************************************//**
  * @brief Database connection.
  */
 typedef struct database_t
 {
+  //! Database status.
+  db_status_e status;
   //! Database connection
   PGconn *conn;
+  //! Database connection string.
+  char *conn_str;
   //! Connection lost retry interval (in millis)
   size_t retryinterval;
   //! Maximum number of inserts per transaction

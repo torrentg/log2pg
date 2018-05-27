@@ -132,7 +132,7 @@ static int witem_init(witem_t *item)
  * @param[in] ptr Pointer to wdir or wfile.
  * @return Initialized object or NULL if error.
  */
-witem_t* witem_alloc(const char *filename, witem_e type, void *ptr)
+witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr)
 {
   if (filename == NULL) {
     assert(false);

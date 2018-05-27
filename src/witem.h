@@ -31,9 +31,9 @@
  * @brief Types of witems.
  */
 typedef enum {
-  WITEM_FILE,
+  WITEM_FILE = 0,
   WITEM_DIR
-} witem_e;
+} witem_type_e;
 
 /**************************************************************************//**
  * @brief Watched item (dir or file).
@@ -44,7 +44,7 @@ typedef struct witem_t
   //! Real filename with absolute path.
   char *filename;
   //! Type of item.
-  witem_e type;
+  witem_type_e type;
   //! Pointer to wdir or wfile (not owner).
   void *ptr;
   //! File stream.
@@ -70,7 +70,7 @@ typedef struct witem_t
 /**************************************************************************
  * Function declarations.
  */
-extern witem_t* witem_alloc(const char *filename, witem_e type, void *ptr);
+extern witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr);
 extern void witem_free(void *obj);
 
 #endif

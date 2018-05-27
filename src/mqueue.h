@@ -40,6 +40,16 @@ typedef struct msg_t
 } msg_t;
 
 /**************************************************************************//**
+ * @brief Message queue status.
+ */
+typedef enum {
+  MQUEUE_STATUS_UNINITIALIZED = 0, // Uninitialized message queue.
+  MQUEUE_STATUS_EMPTY,             // Empty message queue.
+  MQUEUE_STATUS_NOTEMPTY,          // Not empty message queue.
+  MQUEUE_STATUS_CLOSED             // Closed message queue.
+} mqueue_status_e;
+
+/**************************************************************************//**
  * @brief Message queue between 2 threads:
  *        - circular queue
  *        - thread-safe
@@ -70,7 +80,7 @@ typedef struct mqueue_t
   //! Message queue maximum capacity (0=unlimited).
   size_t max_capacity;
   //! Message queue status (internal usage).
-  char status;
+  mqueue_status_e status;
   //TODO: num_msgs, avg_time, etc.
 } mqueue_t;
 

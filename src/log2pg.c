@@ -50,16 +50,16 @@
 
 // public variables
 volatile sig_atomic_t keep_running = 1;
-pthread_t *thread1 = NULL;
+volatile pthread_t *thread1 = NULL;
 
 /**************************************************************************//**
  * @brief Force exit sending a signal to monitor thread.
+ * @details Linked to catchsignal.
  */
 void terminate(void)
 {
-  if (thread1 != NULL) {
+  if (keep_running > 0 && thread1 != NULL) {
     pthread_kill(*thread1, SIGINT);
-    thread1 = NULL; // to avoid double-kill
   }
 }
 
@@ -69,9 +69,8 @@ void terminate(void)
  */
 void catchsignal(int signum)
 {
-  UNUSED(signum);
   keep_running = 0;
-  syslog(LOG_INFO, "system interrupted");
+  syslog(LOG_INFO, "system interrupted (%d)", signum);
 }
 
 /**************************************************************************//**

@@ -37,11 +37,6 @@
 #define INITIAL_CAPACITY 8
 #define RESIZE_FACTOR 2
 
-#define MQUEUE_STATUS_UNINITIALIZED 0
-#define MQUEUE_STATUS_EMPTY 1
-#define MQUEUE_STATUS_NOTEMPTY 2
-#define MQUEUE_STATUS_CLOSED 3
-
 /**************************************************************************//**
  * @brief Creates a message.
  * @param[in] type Message type.
