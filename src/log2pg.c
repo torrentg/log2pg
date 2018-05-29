@@ -155,8 +155,8 @@ int run(const char *filename)
   vector_t tables = {0};
   vector_t dirs = {0};
   vector_t witems = {0};
-  mqueue_t queue1 = {0};
-  mqueue_t queue2 = {0};
+  mqueue_t mqueue1 = {0};
+  mqueue_t mqueue2 = {0};
   map_t dict = {0};
   database_t db = {0};
   params_t params = {0};
@@ -185,24 +185,25 @@ int run(const char *filename)
   }
 
   // initialize message queue between monitor-processor
-  rc = mqueue_init(&queue1, "mqueue1", 0);
+  rc = mqueue_init(&mqueue1, "mqueue1", 0);
   if (rc != EXIT_SUCCESS) {
     syslog(LOG_CRIT, "error creating message queue monitor->processor (%d)", rc);
     goto run_exit;
   }
 
   // initialize message queue between processor-database
-  rc = mqueue_init(&queue2, "mqueue2", QUEUE2_MAX_CAPACITY);
+  rc = mqueue_init(&mqueue2, "mqueue2", QUEUE2_MAX_CAPACITY);
   if (rc != EXIT_SUCCESS) {
     syslog(LOG_CRIT, "error creating message queue processor->database (%d)", rc);
     goto run_exit;
   }
 
   // initialize data
+  db.mqueue = &mqueue2;
   params.ifd = -1;
   params.witems = &witems;
-  params.queue1 = &queue1;
-  params.queue2 = &queue2;
+  params.queue1 = &mqueue1;
+  params.queue2 = &mqueue2;
   params.dict = &dict;
   params.db = &db;
 
@@ -216,7 +217,7 @@ int run(const char *filename)
   // catching interruptions like ctrl-C
   set_signal_handlers();
 
-  rc = pthread_create(&thread_database, NULL, database_run, (void*) &params);
+  rc = pthread_create(&thread_database, NULL, database_run, (void*) &db);
   if (rc != EXIT_SUCCESS) {
     syslog(LOG_ERR, "Error creating database thread");
     goto run_exit;
@@ -243,8 +244,8 @@ int run(const char *filename)
 run_exit:
   config_destroy(&cfg);
   database_reset(&db);
-  mqueue_reset(&queue1, NULL);
-  mqueue_reset(&queue2, free);
+  mqueue_reset(&mqueue1, NULL);
+  mqueue_reset(&mqueue2, free);
   map_reset(&dict, NULL);
   vector_reset(&witems, witem_free);
   vector_reset(&dirs, dir_free);

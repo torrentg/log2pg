@@ -101,6 +101,7 @@ void database_reset(database_t *db)
   db->ts_numinserts = 0;
   db->ts_timeval = (struct timeval){0};
   db->ts_idletimeout = 0;
+  db->tables = NULL;
 }
 
 /**************************************************************************//**
@@ -141,9 +142,9 @@ static int database_prepare_stmt(database_t *db, table_t *table)
  * @param[in] tables List of tables.
  * @return 0=OK, otherwise an error ocurred.
  */
-static int database_connect(database_t *db, vector_t *tables)
+static int database_connect(database_t *db)
 {
-  if (db == NULL || db->conn_str == NULL || tables == NULL ||
+  if (db == NULL || db->conn_str == NULL || db->tables == NULL ||
       db->status == DB_STATUS_CONNECTED || db->status == DB_STATUS_TRANSACTION) {
     assert(false);
     return(1);
@@ -167,8 +168,8 @@ static int database_connect(database_t *db, vector_t *tables)
   int rc = 0;
 
   // create prepared statements
-  for(size_t i=0; i<tables->size; i++) {
-    table_t *table = (table_t*)(tables->data[i]);
+  for(size_t i=0; i<db->tables->size; i++) {
+    table_t *table = (table_t*)(db->tables->data[i]);
     rc |= database_prepare_stmt(db, table);
   }
 
@@ -230,6 +231,7 @@ int database_init(database_t *db, const config_t *cfg, vector_t *tables)
   db->ts_numinserts = 0;
   db->ts_timeval = (struct timeval){0};
   db->status = DB_STATUS_UNINITIALIZED;
+  db->tables = NULL;
 
   // getting transaction attributes from config
   rc |= setting_read_uint(parent, DB_PARAM_RETRY_INTERVAL, &(db->retryinterval));
@@ -257,7 +259,8 @@ int database_init(database_t *db, const config_t *cfg, vector_t *tables)
 
   // connecting to database
   db->conn_str = strdup(connstr);
-  database_connect(db, tables);
+  db->tables = tables;
+  database_connect(db);
   if (db->status != DB_STATUS_CONNECTED) {
     database_reset(db);
     rc = 1;
@@ -383,7 +386,7 @@ static void database_reconnect(database_t *db)
   while(true)
   {
     //TODO: retrieve tables and uncomment line
-    //database_connect(db, tables);
+    database_connect(db);
     if (db->status == DB_STATUS_CONNECTED) {
       break;
     }
@@ -404,15 +407,13 @@ static void database_reconnect(database_t *db)
  */
 void* database_run(void *ptr)
 {
-  params_t *params = (params_t *) ptr;
-  if (params == NULL || params->queue2 == NULL || params->db == NULL || params->db->status == DB_STATUS_UNINITIALIZED) {
+  database_t *db = (database_t *) ptr;
+  if (db == NULL || db->mqueue == NULL ||  db->status == DB_STATUS_UNINITIALIZED || db->tables == NULL) {
     assert(false);
     return(NULL);
   }
 
   syslog(LOG_DEBUG, "database - thread started");
-
-  database_t *db = params->db;
 
   while(true)
   {
@@ -438,7 +439,7 @@ void* database_run(void *ptr)
     }
 
     // waiting for a new message
-    msg_t msg = mqueue_pop(params->queue2, millisToWait);
+    msg_t msg = mqueue_pop(db->mqueue, millisToWait);
 
     if (msg.type == MSG_TYPE_ERROR || msg.type == MSG_TYPE_CLOSE) {
       terminate();

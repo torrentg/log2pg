@@ -23,10 +23,11 @@
 #ifndef DATABASE_H
 #define DATABASE_H
 
-#include "vector.h"
 #include <sys/time.h>
 #include <libconfig.h>
 #include <libpq-fe.h>
+#include "vector.h"
+#include "mqueue.h"
 
 /**************************************************************************//**
  * @brief Types of database connection status.
@@ -39,10 +40,12 @@ typedef enum {
 } db_status_e;
 
 /**************************************************************************//**
- * @brief Database connection.
+ * @brief Database thread.
  */
 typedef struct database_t
 {
+  //! Events queue between processor and database.
+  mqueue_t *mqueue;
   //! Database status.
   db_status_e status;
   //! Database connection
@@ -61,6 +64,8 @@ typedef struct database_t
   struct timeval ts_timeval;
   //! Number of inserts pending to commit.
   size_t ts_numinserts;
+  //! List of tables.
+  vector_t *tables;
 } database_t;
 
 /**************************************************************************
