@@ -31,15 +31,14 @@
 #include <pthread.h>
 #include <assert.h>
 #include "log.h"
-#include "vector.h"
 #include "config.h"
-#include "monitor.h"
-#include "processor.h"
+#include "vector.h"
 #include "mqueue.h"
 #include "entities.h"
 #include "map.h"
-#include "params.h"
 #include "witem.h"
+#include "monitor.h"
+#include "processor.h"
 #include "database.h"
 
 #define PACKAGE_NAME "log2pg"
@@ -158,8 +157,9 @@ int run(const char *filename)
   mqueue_t mqueue1 = {0};
   mqueue_t mqueue2 = {0};
   map_t dict = {0};
-  database_t db = {0};
-  params_t params = {0};
+  monitor_t monitor = {0};
+  processor_t processor = {0};
+  database_t database = {0};
   pthread_t thread_monitor;
   pthread_t thread_processor;
   pthread_t thread_database;
@@ -178,7 +178,7 @@ int run(const char *filename)
   rc |= formats_init(&formats, &cfg);
   rc |= tables_init(&tables, &cfg);
   rc |= dirs_init(&dirs, &cfg, &formats, &tables);
-  rc |= database_init(&db, &cfg, &tables);
+  rc |= database_init(&database, &cfg, &tables);
   config_destroy(&cfg);
   if (rc != EXIT_SUCCESS) {
     goto run_exit;
@@ -199,16 +199,16 @@ int run(const char *filename)
   }
 
   // initialize data
-  db.mqueue = &mqueue2;
-  params.ifd = -1;
-  params.witems = &witems;
-  params.queue1 = &mqueue1;
-  params.queue2 = &mqueue2;
-  params.dict = &dict;
-  params.db = &db;
+  monitor.ifd = -1;
+  monitor.witems = &witems;
+  monitor.mqueue = &mqueue1;
+  monitor.dict = &dict;
+  processor.mqueue1 = &mqueue1;
+  processor.mqueue2 = &mqueue2;
+  database.mqueue = &mqueue2;
 
   // initialize files/dirs to monitor
-  rc = monitor_init(&dirs, &params);
+  rc = monitor_init(&dirs, &monitor);
   if (rc != EXIT_SUCCESS) {
     syslog(LOG_CRIT, "error creating mqueue");
     goto run_exit;
@@ -217,19 +217,19 @@ int run(const char *filename)
   // catching interruptions like ctrl-C
   set_signal_handlers();
 
-  rc = pthread_create(&thread_database, NULL, database_run, (void*) &db);
+  rc = pthread_create(&thread_database, NULL, database_run, &database);
   if (rc != EXIT_SUCCESS) {
     syslog(LOG_ERR, "Error creating database thread");
     goto run_exit;
   }
 
-  rc = pthread_create(&thread_processor, NULL, processor_run, (void*) &params);
+  rc = pthread_create(&thread_processor, NULL, processor_run, &processor);
   if (rc != EXIT_SUCCESS) {
     syslog(LOG_ERR, "Error creating processor thread");
     goto run_exit;
   }
 
-  rc = pthread_create(&thread_monitor, NULL, monitor_run, (void*) &params);
+  rc = pthread_create(&thread_monitor, NULL, monitor_run, &monitor);
   if (rc != EXIT_SUCCESS) {
     syslog(LOG_ERR, "Error creating monitor thread");
     goto run_exit;
@@ -243,7 +243,7 @@ int run(const char *filename)
 
 run_exit:
   config_destroy(&cfg);
-  database_reset(&db);
+  database_reset(&database);
   mqueue_reset(&mqueue1, NULL);
   mqueue_reset(&mqueue2, free);
   map_reset(&dict, NULL);

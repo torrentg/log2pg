@@ -27,7 +27,6 @@
 #include <assert.h>
 #include "config.h"
 #include "table.h"
-#include "params.h"
 #include "wdata.h"
 #include "utils.h"
 #include "database.h"

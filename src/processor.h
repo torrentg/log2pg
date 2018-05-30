@@ -23,6 +23,19 @@
 #ifndef PROCESSOR_H
 #define PROCESSOR_H
 
+#include "mqueue.h"
+
+/**************************************************************************//**
+ * @brief Processor thread.
+ */
+typedef struct processor_t
+{
+  //! Messages received from monitor thread.
+  mqueue_t *mqueue1;
+  //! Messages sended to database thread.
+  mqueue_t *mqueue2;
+} processor_t;
+
 /**************************************************************************
  * Function declarations.
  */

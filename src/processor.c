@@ -28,9 +28,8 @@
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 #include <assert.h>
-#include "witem.h"
 #include "string.h"
-#include "params.h"
+#include "witem.h"
 #include "wdata.h"
 #include "processor.h"
 
@@ -110,7 +109,7 @@ static void trace_chunk_values(const char *str, pcre2_match_data *md, const form
  * @param[in] str String to process (not \0 terminated).
  * @param[in] len Length of the string.
  */
-static void process_chunk(params_t *params, witem_t *item, const char *str, size_t len)
+static void process_chunk(processor_t *params, witem_t *item, const char *str, size_t len)
 {
   assert(params != NULL);
   assert(item != NULL);
@@ -132,7 +131,7 @@ static void process_chunk(params_t *params, witem_t *item, const char *str, size
 
   trace_chunk_values(str, item->md_values, format);
   wdata_t *data = wdata_alloc(item, str);
-  mqueue_push(params->queue2, MSG_TYPE_MATCH1, data, false, 0);
+  mqueue_push(params->mqueue2, MSG_TYPE_MATCH1, data, false, 0);
 }
 
 /**************************************************************************//**
@@ -144,7 +143,7 @@ static void process_chunk(params_t *params, witem_t *item, const char *str, size
  * @param[in] params Monitor parameters.
  * @param[in,out] item Witem to process.
  */
-static void process_buffer(params_t *params, witem_t *item)
+static void process_buffer(processor_t *params, witem_t *item)
 {
   assert(params != NULL);
   assert(item != NULL);
@@ -218,7 +217,7 @@ static void process_buffer(params_t *params, witem_t *item)
  * @param[in] params Monitor parameters.
  * @param[in,out] item Witem to process.
  */
-static void process_witem(params_t *params, witem_t *item)
+static void process_witem(processor_t *params, witem_t *item)
 {
   assert(params != NULL);
   assert(item != NULL);
@@ -256,8 +255,8 @@ static void process_witem(params_t *params, witem_t *item)
  */
 void* processor_run(void *ptr)
 {
-  params_t *params = (params_t *) ptr;
-  if (params == NULL || params->witems == NULL || params->queue1 == NULL) {
+  processor_t *params = (processor_t *) ptr;
+  if (params == NULL || params->mqueue1 == NULL || params->mqueue2 == NULL) {
     assert(false);
     return(NULL);
   }
@@ -265,7 +264,7 @@ void* processor_run(void *ptr)
 
   while(true)
   {
-    msg_t msg = mqueue_pop(params->queue1, 0);
+    msg_t msg = mqueue_pop(params->mqueue1, 0);
 
     if (msg.type == MSG_TYPE_ERROR || msg.type == MSG_TYPE_CLOSE) {
       terminate();
@@ -282,7 +281,7 @@ void* processor_run(void *ptr)
   }
 
   // sends termination signal to database thread
-  mqueue_close(params->queue2);
+  mqueue_close(params->mqueue2);
 
   syslog(LOG_DEBUG, "processor - thread ended");
   return(NULL);

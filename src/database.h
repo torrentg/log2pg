@@ -44,7 +44,7 @@ typedef enum {
  */
 typedef struct database_t
 {
-  //! Events queue between processor and database.
+  //! Messages received from processor.
   mqueue_t *mqueue;
   //! Database status.
   db_status_e status;

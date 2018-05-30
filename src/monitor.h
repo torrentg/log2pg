@@ -23,13 +23,29 @@
 #ifndef MONITOR_H
 #define MONITOR_H
 
+#include "map.h"
 #include "vector.h"
-#include "params.h"
+#include "mqueue.h"
+
+/**************************************************************************//**
+ * @brief Convenience struct used to pass parameters to functions.
+ */
+typedef struct monitor_t
+{
+  //! Inotify file descriptor.
+  int ifd;
+  //! Master table of watched items.
+  vector_t *witems;
+  //! Access to witems by watch descriptor.
+  map_t *dict;
+  //! Events queue between monitor and processor.
+  mqueue_t *mqueue;
+} monitor_t;
 
 /**************************************************************************
  * Function declarations.
  */
-extern int monitor_init(const vector_t *dirs, params_t *params);
+extern int monitor_init(const vector_t *dirs, monitor_t *params);
 extern void* monitor_run(void *ptr);
 
 #endif
