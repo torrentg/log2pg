@@ -153,10 +153,8 @@ int run(const char *filename)
   vector_t formats = {0};
   vector_t tables = {0};
   vector_t dirs = {0};
-  vector_t witems = {0};
   mqueue_t mqueue1 = {0};
   mqueue_t mqueue2 = {0};
-  map_t dict = {0};
   monitor_t monitor = {0};
   processor_t processor = {0};
   database_t database = {0};
@@ -174,16 +172,6 @@ int run(const char *filename)
   init_syslog(&syslog_tag, &cfg);
   syslog(LOG_INFO, "log2pg started");
 
-  // initializations
-  rc |= formats_init(&formats, &cfg);
-  rc |= tables_init(&tables, &cfg);
-  rc |= dirs_init(&dirs, &cfg, &formats, &tables);
-  rc |= database_init(&database, &cfg, &tables);
-  config_destroy(&cfg);
-  if (rc != EXIT_SUCCESS) {
-    goto run_exit;
-  }
-
   // initialize message queue between monitor-processor
   rc = mqueue_init(&mqueue1, "mqueue1", 0);
   if (rc != EXIT_SUCCESS) {
@@ -198,19 +186,27 @@ int run(const char *filename)
     goto run_exit;
   }
 
-  // initialize data
-  monitor.ifd = -1;
-  monitor.witems = &witems;
-  monitor.mqueue = &mqueue1;
-  monitor.dict = &dict;
-  processor.mqueue1 = &mqueue1;
-  processor.mqueue2 = &mqueue2;
-  database.mqueue = &mqueue2;
-
-  // initialize files/dirs to monitor
-  rc = monitor_init(&dirs, &monitor);
+  // initializations
+  rc |= formats_init(&formats, &cfg);
+  rc |= tables_init(&tables, &cfg);
+  rc |= dirs_init(&dirs, &cfg, &formats, &tables);
+  rc |= database_init(&database, &cfg, &tables, &mqueue2);
+  config_destroy(&cfg);
   if (rc != EXIT_SUCCESS) {
-    syslog(LOG_CRIT, "error creating mqueue");
+    goto run_exit;
+  }
+
+  // initialize processor object
+  rc = processor_init(&processor, &mqueue1, &mqueue2);
+  if (rc != EXIT_SUCCESS) {
+    syslog(LOG_CRIT, "error initializing processor");
+    goto run_exit;
+  }
+
+  // initialize monitor object
+  rc = monitor_init(&monitor, &dirs, &mqueue1);
+  if (rc != EXIT_SUCCESS) {
+    syslog(LOG_CRIT, "error initializing monitor");
     goto run_exit;
   }
 
@@ -244,10 +240,10 @@ int run(const char *filename)
 run_exit:
   config_destroy(&cfg);
   database_reset(&database);
+  processor_reset(&processor);
+  monitor_reset(&monitor);
   mqueue_reset(&mqueue1, NULL);
   mqueue_reset(&mqueue2, free);
-  map_reset(&dict, NULL);
-  vector_reset(&witems, witem_free);
   vector_reset(&dirs, dir_free);
   vector_reset(&formats, format_free);
   vector_reset(&tables, table_free);

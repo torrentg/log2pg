@@ -39,6 +39,8 @@ typedef struct processor_t
 /**************************************************************************
  * Function declarations.
  */
+extern int processor_init(processor_t *processor, mqueue_t *mqueue1, mqueue_t *mqueue2);
 extern void* processor_run(void *ptr);
+extern void processor_reset(processor_t *processor);
 
 #endif

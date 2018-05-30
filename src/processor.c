@@ -37,6 +37,38 @@
 extern void terminate(void);
 
 /**************************************************************************//**
+ * @brief Initialize the processor.
+ * @param[in,out] processor Processor object.
+ * @param[in] mqueue1 Message queue (monitor -> processor).
+ * @param[in] mqueue2 Message queue (processor -> database).
+ * @return 0=OK, otherwise an error ocurred.
+ */
+int processor_init(processor_t *processor, mqueue_t *mqueue1, mqueue_t *mqueue2)
+{
+  if (processor == NULL || mqueue1 == NULL || mqueue2 == NULL) {
+    assert(false);
+    return(1);
+  }
+
+  processor->mqueue1 = mqueue1;
+  processor->mqueue2 = mqueue2;
+
+  return(0);
+}
+
+/**************************************************************************//**
+ * @brief Reset a processor object.
+ * @param[in,out] processor Processor object.
+ */
+void processor_reset(processor_t *processor)
+{
+  if (processor != NULL) {
+    processor->mqueue1 = NULL;
+    processor->mqueue2 = NULL;
+  }
+}
+
+/**************************************************************************//**
  * @brief Returns the position in str where match ocurres.
  * @see https://www.pcre.org/current/doc/html/pcre2api.html#SEC31
  * @param[in] md Match data.

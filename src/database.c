@@ -66,62 +66,63 @@ extern void terminate(void);
 
 /**************************************************************************//**
  * @brief Close connection to database.
- * @param[in,out] db Database parameters.
+ * @param[in,out] database Database parameters.
  */
-static void database_close(database_t *db)
+static void database_close(database_t *database)
 {
-  if (db->conn != NULL) {
-    PQfinish(db->conn);
-    db->conn = NULL;
+  if (database->conn != NULL) {
+    PQfinish(database->conn);
+    database->conn = NULL;
     syslog(LOG_DEBUG, "database - connection to database closed");
   }
 
-  db->status = DB_STATUS_ERRCON;
+  database->status = DB_STATUS_ERRCON;
 }
 
 /**************************************************************************//**
- * @brief Reset a database struct.
- * @param[in,out] db Database struct.
+ * @brief Reset a database object.
+ * @param[in,out] database Database object.
  */
-void database_reset(database_t *db)
+void database_reset(database_t *database)
 {
-  if (db == NULL) {
+  if (database == NULL) {
     assert(0);
     return;
   }
 
-  database_close(db);
-  free(db->conn_str);
-  db->conn_str = NULL;
-  db->status = DB_STATUS_UNINITIALIZED;
-  db->retryinterval = 0;
-  db->ts_maxduration = 0;
-  db->ts_maxinserts = 0;
-  db->ts_numinserts = 0;
-  db->ts_timeval = (struct timeval){0};
-  db->ts_idletimeout = 0;
-  db->tables = NULL;
+  database_close(database);
+  free(database->conn_str);
+  database->conn_str = NULL;
+  database->status = DB_STATUS_UNINITIALIZED;
+  database->retryinterval = 0;
+  database->ts_maxduration = 0;
+  database->ts_maxinserts = 0;
+  database->ts_numinserts = 0;
+  database->ts_timeval = (struct timeval){0};
+  database->ts_idletimeout = 0;
+  database->tables = NULL;
+  database->mqueue = NULL;
 }
 
 /**************************************************************************//**
  * @brief Creates a prepared statement for the Sql of the given table.
  * @see https://www.postgresql.org/docs/9.3/static/libpq-exec.html
- * @param[in,out] db Database object.
+ * @param[in,out] database Database object.
  * @param[in] table Table object.
  * @return 0=OK, otherwise an error ocurred.
  */
-static int database_prepare_stmt(database_t *db, table_t *table)
+static int database_prepare_stmt(database_t *database, table_t *table)
 {
-  assert(db != NULL);
+  assert(database != NULL);
   assert(table != NULL);
 
   int rc = 0;
   PGresult *res = NULL;
   char *query = table_get_stmt(table);
 
-  res = PQprepare(db->conn, table->name, query, 0, NULL);
+  res = PQprepare(database->conn, table->name, query, 0, NULL);
   if (res == NULL || PQresultStatus(res) != PGRES_COMMAND_OK) {
-    char *msg = PQerrorMessage(db->conn);
+    char *msg = PQerrorMessage(database->conn);
     replace_char(msg, '\n', '\0');
     syslog(LOG_ERR, "database - error preparing statement '%s' - %s", table->name, msg);
     rc = 1;
@@ -137,28 +138,28 @@ static int database_prepare_stmt(database_t *db, table_t *table)
 
 /**************************************************************************//**
  * @brief Connect to database.
- * @param[in,out] db Database parameters.
+ * @param[in,out] database Database parameters.
  * @param[in] tables List of tables.
  * @return 0=OK, otherwise an error ocurred.
  */
-static int database_connect(database_t *db)
+static int database_connect(database_t *database)
 {
-  if (db == NULL || db->conn_str == NULL || db->tables == NULL ||
-      db->status == DB_STATUS_CONNECTED || db->status == DB_STATUS_TRANSACTION) {
+  if (database == NULL || database->conn_str == NULL || database->tables == NULL ||
+      database->status == DB_STATUS_CONNECTED || database->status == DB_STATUS_TRANSACTION) {
     assert(false);
     return(1);
   }
 
   // closing current connection
-  if (db->conn != NULL) {
-    database_close(db);
+  if (database->conn != NULL) {
+    database_close(database);
   }
 
   // Connecting to database
-  db->conn = PQconnectdb(db->conn_str);
-  if (db->conn == NULL || PQstatus(db->conn) != CONNECTION_OK) {
-    syslog(LOG_ERR, "database - %s", PQerrorMessage(db->conn));
-    database_close(db);
+  database->conn = PQconnectdb(database->conn_str);
+  if (database->conn == NULL || PQstatus(database->conn) != CONNECTION_OK) {
+    syslog(LOG_ERR, "database - %s", PQerrorMessage(database->conn));
+    database_close(database);
     return(1);
   }
 
@@ -167,16 +168,16 @@ static int database_connect(database_t *db)
   int rc = 0;
 
   // create prepared statements
-  for(size_t i=0; i<db->tables->size; i++) {
-    table_t *table = (table_t*)(db->tables->data[i]);
-    rc |= database_prepare_stmt(db, table);
+  for(size_t i=0; i<database->tables->size; i++) {
+    table_t *table = (table_t*)(database->tables->data[i]);
+    rc |= database_prepare_stmt(database, table);
   }
 
   if (rc != 0) {
-    database_close(db);
+    database_close(database);
   }
   else {
-    db->status = DB_STATUS_CONNECTED;
+    database->status = DB_STATUS_CONNECTED;
   }
 
   return(rc);
@@ -184,14 +185,14 @@ static int database_connect(database_t *db)
 
 /**************************************************************************//**
  * @brief Initialize the database.
- * @param[in,out] db Database object.
+ * @param[in,out] database Database object.
  * @param[in] cfg Configuration file.
  * @param[in] tables List of tables.
  * @return 0=OK, otherwise an error ocurred.
  */
-int database_init(database_t *db, const config_t *cfg, vector_t *tables)
+int database_init(database_t *database, const config_t *cfg, vector_t *tables, mqueue_t *mqueue)
 {
-  if (db == NULL || db->status != DB_STATUS_UNINITIALIZED || cfg == NULL || tables == NULL) {
+  if (database == NULL || database->status != DB_STATUS_UNINITIALIZED || cfg == NULL || tables == NULL) {
     assert(false);
     return(1);
   }
@@ -221,27 +222,28 @@ int database_init(database_t *db, const config_t *cfg, vector_t *tables)
   }
 
   // setting default values
-  db->conn = NULL;
-  db->conn_str = NULL;
-  db->retryinterval = DEFAULT_RETRY_INTERVAL;
-  db->ts_maxinserts = DEFAULT_MAX_INSERTS;
-  db->ts_maxduration = DEFAULT_MAX_DURATION;
-  db->ts_idletimeout = DEFAULT_IDLE_TIMEOUT;
-  db->ts_numinserts = 0;
-  db->ts_timeval = (struct timeval){0};
-  db->status = DB_STATUS_UNINITIALIZED;
-  db->tables = NULL;
+  database->conn = NULL;
+  database->conn_str = NULL;
+  database->retryinterval = DEFAULT_RETRY_INTERVAL;
+  database->ts_maxinserts = DEFAULT_MAX_INSERTS;
+  database->ts_maxduration = DEFAULT_MAX_DURATION;
+  database->ts_idletimeout = DEFAULT_IDLE_TIMEOUT;
+  database->ts_numinserts = 0;
+  database->ts_timeval = (struct timeval){0};
+  database->status = DB_STATUS_UNINITIALIZED;
+  database->tables = NULL;
+  database->mqueue = NULL;
 
   // getting transaction attributes from config
-  rc |= setting_read_uint(parent, DB_PARAM_RETRY_INTERVAL, &(db->retryinterval));
+  rc |= setting_read_uint(parent, DB_PARAM_RETRY_INTERVAL, &(database->retryinterval));
   config_setting_t *children1 = config_setting_lookup(parent, DB_PARAM_TRANSACTION);
   if (children1 != NULL) {
     rc |= setting_check_childs(children1, TS_PARAMS);
-    rc |= setting_read_uint(children1, TS_PARAM_MAX_INSERTS, &(db->ts_maxinserts));
-    rc |= setting_read_uint(children1, TS_PARAM_MAX_DURATION, &(db->ts_maxduration));
-    rc |= setting_read_uint(children1, TS_PARAM_IDLE_TIMEOUT, &(db->ts_idletimeout));
+    rc |= setting_read_uint(children1, TS_PARAM_MAX_INSERTS, &(database->ts_maxinserts));
+    rc |= setting_read_uint(children1, TS_PARAM_MAX_DURATION, &(database->ts_maxduration));
+    rc |= setting_read_uint(children1, TS_PARAM_IDLE_TIMEOUT, &(database->ts_idletimeout));
 
-    if (db->ts_idletimeout > db->ts_maxduration) {
+    if (database->ts_idletimeout > database->ts_maxduration) {
         config_setting_t *aux = config_setting_lookup(children1, TS_PARAM_IDLE_TIMEOUT);
         syslog(LOG_ERR, TS_PARAM_IDLE_TIMEOUT " greater than " TS_PARAM_MAX_DURATION " at %s:%d.",
                config_setting_source_file(aux),
@@ -254,14 +256,15 @@ int database_init(database_t *db, const config_t *cfg, vector_t *tables)
   }
 
   syslog(LOG_DEBUG, "database - params = [conn=%s, maxinserts=%zu, maxduration=%zu, idletimeout=%zu, retryinterval=%zu]",
-         connstr, db->ts_maxinserts, db->ts_maxduration, db->ts_idletimeout, db->retryinterval);
+         connstr, database->ts_maxinserts, database->ts_maxduration, database->ts_idletimeout, database->retryinterval);
 
   // connecting to database
-  db->conn_str = strdup(connstr);
-  db->tables = tables;
-  database_connect(db);
-  if (db->status != DB_STATUS_CONNECTED) {
-    database_reset(db);
+  database->conn_str = strdup(connstr);
+  database->tables = tables;
+  database->mqueue = mqueue;
+  database_connect(database);
+  if (database->status != DB_STATUS_CONNECTED) {
+    database_reset(database);
     rc = 1;
   }
 
@@ -270,33 +273,33 @@ int database_init(database_t *db, const config_t *cfg, vector_t *tables)
 
 /**************************************************************************//**
  * @brief Process database error.
- * @param[in,out] db Database parameters.
+ * @param[in,out] database Database parameters.
  */
-static void database_process_error(database_t *db)
+static void database_process_error(database_t *database)
 {
-  syslog(LOG_WARNING, "database - %s", PQerrorMessage(db->conn));
-  db->status = DB_STATUS_ERRCON;
+  syslog(LOG_WARNING, "database - %s", PQerrorMessage(database->conn));
+  database->status = DB_STATUS_ERRCON;
 }
 
 /**************************************************************************//**
  * @brief Starts a transaction.
- * @param[in,out] db Database parameters.
+ * @param[in,out] database Database parameters.
  */
-static void database_begin(database_t *db)
+static void database_begin(database_t *database)
 {
-  if (db->status != DB_STATUS_CONNECTED) {
+  if (database->status != DB_STATUS_CONNECTED) {
     assert(false);
     return;
   }
 
-  PGresult* res = PQexec(db->conn, "BEGIN");
+  PGresult* res = PQexec(database->conn, "BEGIN");
   if (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_NONFATAL_ERROR) {
-    database_process_error(db);
+    database_process_error(database);
   }
   else {
-    db->ts_numinserts = 0;
-    gettimeofday(&(db->ts_timeval), NULL);
-    db->status = DB_STATUS_TRANSACTION;
+    database->ts_numinserts = 0;
+    gettimeofday(&(database->ts_timeval), NULL);
+    database->status = DB_STATUS_TRANSACTION;
     syslog(LOG_DEBUG, "database - begin");
   }
 
@@ -305,23 +308,23 @@ static void database_begin(database_t *db)
 
 /**************************************************************************//**
  * @brief Commits the current transaction.
- * @param[in,out] db Database parameters.
+ * @param[in,out] database Database parameters.
  */
-static void database_commit(database_t *db)
+static void database_commit(database_t *database)
 {
-  if (db->status != DB_STATUS_TRANSACTION) {
+  if (database->status != DB_STATUS_TRANSACTION) {
     assert(false);
     return;
   }
 
-  PGresult* res = PQexec(db->conn, "COMMIT");
+  PGresult* res = PQexec(database->conn, "COMMIT");
   if (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_NONFATAL_ERROR) {
-    database_process_error(db);
+    database_process_error(database);
   }
   else {
-    db->ts_numinserts = 0;
-    db->ts_timeval = (struct timeval){0};
-    db->status = DB_STATUS_CONNECTED;
+    database->ts_numinserts = 0;
+    database->ts_timeval = (struct timeval){0};
+    database->status = DB_STATUS_CONNECTED;
     syslog(LOG_DEBUG, "database - commit");
   }
 
@@ -330,13 +333,13 @@ static void database_commit(database_t *db)
 
 /**************************************************************************//**
  * @brief Inserts data to database.
- * @param[in,out] db Database parameters.
+ * @param[in,out] database Database parameters.
  * @param[in] item Witem's data owner.
  * @param[in] ptr Table param values (sorted, separated by '\0').
  */
-static void database_exec(database_t *db, witem_t *item, const char *ptr)
+static void database_exec(database_t *database, witem_t *item, const char *ptr)
 {
-  assert(db != NULL);
+  assert(database != NULL);
   assert(item != NULL);
   assert(ptr != NULL);
 
@@ -346,8 +349,8 @@ static void database_exec(database_t *db, witem_t *item, const char *ptr)
   const char *paramValues[MAX_NUM_PARAMS];
 
   // ensures that a transaction exists
-  if (db->status == DB_STATUS_CONNECTED) {
-    database_begin(db);
+  if (database->status == DB_STATUS_CONNECTED) {
+    database_begin(database);
   }
 
   syslog(LOG_DEBUG, "database - exec [table=%s, file=%s, values=%p]",
@@ -359,15 +362,15 @@ static void database_exec(database_t *db, witem_t *item, const char *ptr)
     ptr += len + 1;
   }
 
-  PGresult* res = PQexecPrepared(db->conn, table->name, numParams, paramValues, NULL, NULL, 0);
+  PGresult* res = PQexecPrepared(database->conn, table->name, numParams, paramValues, NULL, NULL, 0);
   if (PQresultStatus(res) == PGRES_NONFATAL_ERROR) {
-    syslog(LOG_WARNING, "database - warning : %s", PQerrorMessage(db->conn));
+    syslog(LOG_WARNING, "database - warning : %s", PQerrorMessage(database->conn));
   }
   if (PQresultStatus(res) == PGRES_NONFATAL_ERROR || PQresultStatus(res) == PGRES_COMMAND_OK) {
-    db->ts_numinserts++;
+    database->ts_numinserts++;
   }
   else {
-    database_process_error(db);
+    database_process_error(database);
   }
 
   PQclear(res);
@@ -375,24 +378,24 @@ static void database_exec(database_t *db, witem_t *item, const char *ptr)
 
 /**************************************************************************//**
  * @brief Try to reconnect to database.
- * @param[in,out] db Database parameters.
+ * @param[in,out] database Database parameters.
  */
-static void database_reconnect(database_t *db)
+static void database_reconnect(database_t *database)
 {
-  assert(db != NULL);
-  assert(db->status == DB_STATUS_ERRCON);
+  assert(database != NULL);
+  assert(database->status == DB_STATUS_ERRCON);
 
   while(true)
   {
     //TODO: retrieve tables and uncomment line
-    database_connect(db);
-    if (db->status == DB_STATUS_CONNECTED) {
+    database_connect(database);
+    if (database->status == DB_STATUS_CONNECTED) {
       break;
     }
 
     struct timespec ts = {0};
-    ts.tv_sec = db->retryinterval / 1000;
-    ts.tv_nsec = (db->retryinterval % 1000) * 1000000;
+    ts.tv_sec = database->retryinterval / 1000;
+    ts.tv_nsec = (database->retryinterval % 1000) * 1000000;
 
     nanosleep(&ts, NULL);
   }
@@ -406,8 +409,8 @@ static void database_reconnect(database_t *db)
  */
 void* database_run(void *ptr)
 {
-  database_t *db = (database_t *) ptr;
-  if (db == NULL || db->mqueue == NULL ||  db->status == DB_STATUS_UNINITIALIZED || db->tables == NULL) {
+  database_t *database = (database_t *) ptr;
+  if (database == NULL || database->mqueue == NULL ||  database->status == DB_STATUS_UNINITIALIZED || database->tables == NULL) {
     assert(false);
     return(NULL);
   }
@@ -418,27 +421,27 @@ void* database_run(void *ptr)
   {
     size_t millisToWait = 0;
 
-    if (db->status == DB_STATUS_TRANSACTION)
+    if (database->status == DB_STATUS_TRANSACTION)
     {
-      size_t millis = elapsed_millis(&(db->ts_timeval));
+      size_t millis = elapsed_millis(&(database->ts_timeval));
 
-      if (db->ts_numinserts >= db->ts_maxinserts) {
-        database_commit(db);
+      if (database->ts_numinserts >= database->ts_maxinserts) {
+        database_commit(database);
       }
-      else if (millis >= db->ts_maxduration) {
-        database_commit(db);
+      else if (millis >= database->ts_maxduration) {
+        database_commit(database);
       }
       else {
-        size_t millis_to_maxduration = db->ts_maxduration - millis;
-        millisToWait = MIN(millis_to_maxduration, db->ts_idletimeout);
+        size_t millis_to_maxduration = database->ts_maxduration - millis;
+        millisToWait = MIN(millis_to_maxduration, database->ts_idletimeout);
       }
     }
-    else if (db->status == DB_STATUS_ERRCON) {
-      database_reconnect(db);
+    else if (database->status == DB_STATUS_ERRCON) {
+      database_reconnect(database);
     }
 
     // waiting for a new message
-    msg_t msg = mqueue_pop(db->mqueue, millisToWait);
+    msg_t msg = mqueue_pop(database->mqueue, millisToWait);
 
     if (msg.type == MSG_TYPE_ERROR || msg.type == MSG_TYPE_CLOSE) {
       terminate();
@@ -448,21 +451,21 @@ void* database_run(void *ptr)
       continue;
     }
     else if (msg.type == MSG_TYPE_TIMEOUT) {
-      database_commit(db);
+      database_commit(database);
       continue;
     }
     else {
       assert(msg.type == MSG_TYPE_MATCH1);
       wdata_t *data = (wdata_t *) msg.data;
       assert(data != NULL);
-      database_exec(db, data->item, &(data->x));
+      database_exec(database, data->item, &(data->x));
       free(data);
     }
   }
 
   // we commit if there is a transaction in progress
-  if (db->status == DB_STATUS_TRANSACTION) {
-    database_commit(db);
+  if (database->status == DB_STATUS_TRANSACTION) {
+    database_commit(database);
   }
 
   syslog(LOG_DEBUG, "database - thread ended");

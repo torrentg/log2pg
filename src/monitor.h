@@ -34,19 +34,20 @@ typedef struct monitor_t
 {
   //! Inotify file descriptor.
   int ifd;
-  //! Master table of watched items.
-  vector_t *witems;
-  //! Access to witems by watch descriptor.
-  map_t *dict;
   //! Events queue between monitor and processor.
   mqueue_t *mqueue;
+  //! Master table of watched items.
+  vector_t witems;
+  //! Access to witems by watch descriptor.
+  map_t dict;
 } monitor_t;
 
 /**************************************************************************
  * Function declarations.
  */
-extern int monitor_init(const vector_t *dirs, monitor_t *params);
+extern int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue);
 extern void* monitor_run(void *ptr);
+extern void monitor_reset(monitor_t *monitor);
 
 #endif
 

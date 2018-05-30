@@ -77,15 +77,15 @@ static CODE eventnames[] = {
 
 /**************************************************************************//**
  * @brief Add a inotify watch.
- * @param[in,out] params Monitor parameters.
+ * @param[in,out] monitor Monitor parameters.
  * @param[in] item Item to monitor.
  * @param[in] freeonerror Free item if inotify fails to monitor it.
  * @return 1=watch added succesfully, 0=otherwise.
  */
-static int monitor_add_watch(monitor_t *params, witem_t *item, bool freeonerror)
+static int monitor_add_watch(monitor_t *monitor, witem_t *item, bool freeonerror)
 {
-  assert(params != NULL);
-  assert(params->ifd >= 0);
+  assert(monitor != NULL);
+  assert(monitor->ifd > 0);
   if (item == NULL) {
     return(0);
   }
@@ -100,7 +100,7 @@ static int monitor_add_watch(monitor_t *params, witem_t *item, bool freeonerror)
     mask = IN_CREATE|IN_MOVE_SELF|IN_MOVED_FROM|IN_MOVED_TO|IN_EXCL_UNLINK|IN_ONLYDIR;
   }
 
-  wd = inotify_add_watch(params->ifd, item->filename, mask);
+  wd = inotify_add_watch(monitor->ifd, item->filename, mask);
   if (wd < 0) {
     syslog(LOG_ALERT, "monitor - failed to monitor %s '%s' - %s",
            (item->type==WITEM_DIR?"directory":"file"), item->filename, strerror(errno));
@@ -111,14 +111,14 @@ static int monitor_add_watch(monitor_t *params, witem_t *item, bool freeonerror)
   }
   else {
     // insert item in the table of declared items
-    if (!vector_contains(params->witems, item)) {
-      vector_insert(params->witems, item);
+    if (!vector_contains(&(monitor->witems), item)) {
+      vector_insert(&(monitor->witems), item);
     }
     // update dictionary for fast retrieval
-    map_insert(params->dict, wd, item);
+    map_insert(&(monitor->dict), wd, item);
     // notifies to other threads that a new file is available
     if (item->type == WITEM_FILE) {
-      mqueue_push(params->mqueue, MSG_TYPE_FILE0, item, true, 0);
+      mqueue_push(monitor->mqueue, MSG_TYPE_FILE0, item, true, 0);
     }
     // trace
     syslog(LOG_INFO, "monitor - monitoring %s '%s' on WD #%d",
@@ -129,14 +129,14 @@ static int monitor_add_watch(monitor_t *params, witem_t *item, bool freeonerror)
 
 /**************************************************************************//**
  * @brief Add inotify watches for all files matching a pattern.
- * @param[in,out] params Monitor parameters.
+ * @param[in,out] monitor Monitor parameters.
  * @param[in] dir Directory to monitor.
  * @param[in] file File pattern to monitor.
  * @return Number of added watches.
  */
-static int monitor_add_dir_pattern(monitor_t *params, dir_t *dir, file_t *file)
+static int monitor_add_dir_pattern(monitor_t *monitor, dir_t *dir, file_t *file)
 {
-  assert(params != NULL);
+  assert(monitor != NULL);
   assert(dir != NULL);
   assert(file != NULL);
 
@@ -157,14 +157,14 @@ static int monitor_add_dir_pattern(monitor_t *params, dir_t *dir, file_t *file)
   // adding existing matched files
   for(int i=0; globbuf.gl_pathv[i]!=NULL; i++) {
     const char *realfilename = globbuf.gl_pathv[i];
-    int ipos = vector_find(params->witems, realfilename);
+    int ipos = vector_find(&(monitor->witems), realfilename);
     if (ipos >= 0) {
       syslog(LOG_WARNING, "monitor - file '%s' matched twice. Only first match applies", realfilename);
     }
     else {
       if (is_readable_file(realfilename)) {
         witem_t *item = witem_alloc(realfilename, WITEM_FILE, file);
-        num_watches += monitor_add_watch(params, item, true);
+        num_watches += monitor_add_watch(monitor, item, true);
       }
     }
   }
@@ -177,13 +177,13 @@ monitor_add_dir_pattern_exit:
 
 /**************************************************************************//**
  * @brief Add inotify watches on a directory and its patterns.
- * @param[in,out] params Monitor parameters.
+ * @param[in,out] monitor Monitor parameters.
  * @param[in] dir Directory to monitor.
  * @return Number of added watches.
  */
-static int monitor_add_dir(monitor_t *params, dir_t *dir)
+static int monitor_add_dir(monitor_t *monitor, dir_t *dir)
 {
-  assert(params != NULL);
+  assert(monitor != NULL);
   assert(dir != NULL);
 
   if (!is_readable_dir(dir->path)) {
@@ -194,13 +194,13 @@ static int monitor_add_dir(monitor_t *params, dir_t *dir)
 
   // adding directory
   witem_t *item = witem_alloc(dir->path, WITEM_DIR, dir);
-  num_watches += monitor_add_watch(params, item, true);
+  num_watches += monitor_add_watch(monitor, item, true);
 
   // adding files matching patterns
   if (num_watches > 0) {
     for(size_t i=0; i<dir->files.size; i++) {
       file_t *file = (file_t *) dir->files.data[i];
-      num_watches += monitor_add_dir_pattern(params, dir, file);
+      num_watches += monitor_add_dir_pattern(monitor, dir, file);
     }
   }
 
@@ -209,19 +209,19 @@ static int monitor_add_dir(monitor_t *params, dir_t *dir)
 
 /**************************************************************************//**
  * @brief Add inotify watches.
- * @param[in,out] params Monitor parameters.
+ * @param[in,out] monitor Monitor parameters.
  * @return Number of added watches.
  */
-static int monitor_add_dirs(monitor_t *params, const vector_t *dirs)
+static int monitor_add_dirs(monitor_t *monitor, const vector_t *dirs)
 {
-  assert(params != NULL);
+  assert(monitor != NULL);
   assert(dirs != NULL);
 
   int num_watches = 0;
 
   for(size_t i=0; i<dirs->size; i++) {
     dir_t *dir = (dir_t *) dirs->data[i];
-    num_watches += monitor_add_dir(params, dir);
+    num_watches += monitor_add_dir(monitor, dir);
   }
 
   return(num_watches);
@@ -229,18 +229,17 @@ static int monitor_add_dirs(monitor_t *params, const vector_t *dirs)
 
 /**************************************************************************//**
  * @brief Remove inotify watch.
- * @param[in,out] params Monitor parameters.
+ * @param[in,out] monitor Monitor parameters.
  * @param[in] wd Inotify watch descriptor.
  */
-static void monitor_rm_watch(monitor_t *params, int wd)
+static void monitor_rm_watch(monitor_t *monitor, int wd)
 {
-  assert(params != NULL);
-  assert(params->ifd >= 0);
-  assert(params->dict != NULL);
+  assert(monitor != NULL);
+  assert(monitor->ifd > 0);
   assert(wd >= 0);
 
   // retrieve watched item
-  witem_t *item = (witem_t *) map_find(params->dict, wd);
+  witem_t *item = (witem_t *) map_find(&(monitor->dict), wd);
   if (item == NULL) {
     syslog(LOG_WARNING, "monitor - non-existing witem for WD #%d", wd);
     assert(false);
@@ -251,30 +250,29 @@ static void monitor_rm_watch(monitor_t *params, int wd)
          (item->type==WITEM_DIR?"directory":"file"), item->filename, wd);
 
   // remove inotify watch
-  inotify_rm_watch(params->ifd, wd);
+  inotify_rm_watch(monitor->ifd, wd);
 
   // remove item from map
-  map_remove(params->dict, wd, NULL);
+  map_remove(&(monitor->dict), wd, NULL);
   // notify that something has changed
   if (item->type == WITEM_FILE) {
-    mqueue_push(params->mqueue, MSG_TYPE_FILE1, item, true, 0);
+    mqueue_push(monitor->mqueue, MSG_TYPE_FILE1, item, true, 0);
   }
 }
 
 /**************************************************************************//**
  * @brief Remove inotify watches.
- * @param[in,out] params Monitor parameters.
+ * @param[in,out] monitor Monitor parameters.
  */
-static void monitor_rm_watches(monitor_t *params)
+static void monitor_rm_watches(monitor_t *monitor)
 {
-  assert(params != NULL);
-  assert(params->dict != NULL);
+  assert(monitor != NULL);
 
   map_bucket_t *bucket = NULL;
   map_iterator_t it = {0};
 
-  while((bucket = map_next(params->dict, &it)) != NULL) {
-    monitor_rm_watch(params, bucket->key);
+  while((bucket = map_next(&(monitor->dict), &it)) != NULL) {
+    monitor_rm_watch(monitor, bucket->key);
     it.pos = it.pos - (it.pos==0?0:1);
     it.num--;
   }
@@ -312,24 +310,24 @@ static void trace_event(const struct inotify_event *event, witem_t *item)
 
 /**************************************************************************//**
  * @brief Process an inotify event.
- * @param[in,out] params Monitor parameters.
+ * @param[in,out] monitor Monitor parameters.
  * @param[in] event Event to process.
  * @param[in] item Watched item.
  */
-static void process_event_file(monitor_t *params, const struct inotify_event *event, witem_t *item)
+static void process_event_file(monitor_t *monitor, const struct inotify_event *event, witem_t *item)
 {
   if (event->mask & IN_MODIFY) {
-    mqueue_push(params->mqueue, MSG_TYPE_FILE0, item, true, 0);
+    mqueue_push(monitor->mqueue, MSG_TYPE_FILE0, item, true, 0);
   }
 }
 
 /**************************************************************************//**
  * @brief Process IN_CREATE event on a directory.
- * @param[in] params Monitor parameters.
+ * @param[in] monitor Monitor parameters.
  * @param[in] dir Directory where event ocurres.
  * @param[in] name File name (not a pattern).
  */
-static void process_event_dir_create(monitor_t *params, dir_t *dir, const char *name)
+static void process_event_dir_create(monitor_t *monitor, dir_t *dir, const char *name)
 {
   // checks if dir patterns match file name
   int ipos = dir_file_match(dir, name);
@@ -341,20 +339,20 @@ static void process_event_dir_create(monitor_t *params, dir_t *dir, const char *
   char *filename = concat(3, dir->path, "/", name);
 
   // if witem was previously declared ...
-  ipos = vector_find(params->witems, filename);
+  ipos = vector_find(&(monitor->witems), filename);
   if (ipos >= 0) {
     syslog(LOG_DEBUG, "monitor - file '%s' was previously declared", filename);
-    witem_t *item = (witem_t *) params->witems->data[ipos];
+    witem_t *item = (witem_t *) monitor->witems.data[ipos];
     assert(item->type == WITEM_FILE);
     assert(item->ptr == file);
-    monitor_add_watch(params, item, false);
+    monitor_add_watch(monitor, item, false);
     goto process_event_dir_create_exit;
   }
 
   // create a new witem and monitor it
   if (is_readable_file(filename)) {
     witem_t *item = witem_alloc(filename, WITEM_FILE, file);
-    monitor_add_watch(params, item, true);
+    monitor_add_watch(monitor, item, true);
   }
   else {
     syslog(LOG_INFO, "monitor - '%s' is not a readable file", filename);
@@ -366,22 +364,22 @@ process_event_dir_create_exit:
 
 /**************************************************************************//**
  * @brief Process IN_MOVED_FROM event on a directory.
- * @param[in] params Monitor parameters.
+ * @param[in] monitor Monitor parameters.
  * @param[in] dir Directory where event ocurres.
  * @param[in] name File name (not a pattern).
  */
-static void process_event_dir_moved_from(monitor_t *params, dir_t *dir, const char *name)
+static void process_event_dir_moved_from(monitor_t *monitor, dir_t *dir, const char *name)
 {
   char *filename = concat(3, dir->path, "/", name);
   map_bucket_t *bucket = NULL;
   map_iterator_t it = {0};
 
-  while((bucket = map_next(params->dict, &it)) != NULL) {
+  while((bucket = map_next(&(monitor->dict), &it)) != NULL) {
     witem_t *item = (witem_t *) bucket->value;
     assert(item != NULL);
     assert(item->filename != NULL);
     if (item != NULL && item->filename != NULL && strcmp(filename, item->filename) == 0) {
-      monitor_rm_watch(params, bucket->key);
+      monitor_rm_watch(monitor, bucket->key);
       break;
     }
   }
@@ -392,26 +390,26 @@ static void process_event_dir_moved_from(monitor_t *params, dir_t *dir, const ch
 /**************************************************************************//**
  * @brief Process IN_MOVE_SELF event on a directory.
  * @details Removes all watched entries starting by directory path.
- * @param[in] params Monitor parameters.
+ * @param[in] monitor Monitor parameters.
  * @param[in] wd Watch descriptor of current event.
  * @param[in] dir Directory where event ocurres.
  */
-static void process_event_dir_move_self(monitor_t *params, int wd, dir_t *dir)
+static void process_event_dir_move_self(monitor_t *monitor, int wd, dir_t *dir)
 {
   char *path = concat(2, dir->path, "/");
   map_bucket_t *bucket = NULL;
   map_iterator_t it = {0};
 
   // removes watch from directory
-  monitor_rm_watch(params, wd);
+  monitor_rm_watch(monitor, wd);
 
   // removes watch for all watched files in directory
-  while((bucket = map_next(params->dict, &it)) != NULL) {
+  while((bucket = map_next(&(monitor->dict), &it)) != NULL) {
     witem_t *item = (witem_t *) bucket->value;
     assert(item != NULL);
     assert(item->filename != NULL);
     if (item != NULL && item->filename != NULL && starts_with(path, item->filename)) {
-      monitor_rm_watch(params, bucket->key);
+      monitor_rm_watch(monitor, bucket->key);
       it.pos = it.pos - (it.pos==0?0:1);
       it.num--;
     }
@@ -422,30 +420,30 @@ static void process_event_dir_move_self(monitor_t *params, int wd, dir_t *dir)
 
 /**************************************************************************//**
  * @brief Process an inotify event.
- * @param[in] params Monitor parameters.
+ * @param[in] monitor Monitor parameters.
  * @param[in] event Event to process.
  * @param[in] item Event watched item.
  */
-static void process_event_dir(monitor_t *params, const struct inotify_event *event, witem_t *item)
+static void process_event_dir(monitor_t *monitor, const struct inotify_event *event, witem_t *item)
 {
   // new file in this directory
   if (event->mask & IN_CREATE) {
     const char *name = event->name;
-    process_event_dir_create(params, item->ptr, name);
+    process_event_dir_create(monitor, item->ptr, name);
     return;
   }
 
   // file renamed or moved from this directory
   if (event->mask & IN_MOVED_FROM) {
     const char *name = event->name;
-    process_event_dir_moved_from(params, item->ptr, name);
+    process_event_dir_moved_from(monitor, item->ptr, name);
     return;
   }
 
   // file renamed or moved to this directory
   if (event->mask & IN_MOVED_TO) {
     const char *name = event->name;
-    process_event_dir_create(params, item->ptr, name);
+    process_event_dir_create(monitor, item->ptr, name);
     return;
   }
 
@@ -453,26 +451,24 @@ static void process_event_dir(monitor_t *params, const struct inotify_event *eve
   if (event->mask & IN_MOVE_SELF) {
     // removes directory watch and all watched items inside this directory
     // nobody cares if directory is re-created
-    process_event_dir_move_self(params, event->wd, item->ptr);
+    process_event_dir_move_self(monitor, event->wd, item->ptr);
     return;
   }
 }
 
 /**************************************************************************//**
  * @brief Process an inotify event.
- * @param[in] params Monitor parameters.
+ * @param[in] monitor Monitor parameters.
  * @param[in] event Event to process.
  */
-static void process_event(monitor_t *params, const struct inotify_event *event)
+static void process_event(monitor_t *monitor, const struct inotify_event *event)
 {
-  assert(event != NULL);
-
-  if (event == NULL || event->wd < 0 || params->dict == NULL) {
+  if (event == NULL || event == NULL || event->wd < 0) {
     assert(false);
     return;
   }
 
-  witem_t *item = map_find(params->dict, event->wd);
+  witem_t *item = map_find(&(monitor->dict), event->wd);
   trace_event(event, item);
 
   if (item == NULL) {
@@ -480,68 +476,72 @@ static void process_event(monitor_t *params, const struct inotify_event *event)
   }
 
   if (event->mask & IN_IGNORED) {
-    monitor_rm_watch(params, event->wd);
+    monitor_rm_watch(monitor, event->wd);
   }
   else if (item->type == WITEM_FILE) {
-    process_event_file(params, event, item);
+    process_event_file(monitor, event, item);
   }
   else {
-    process_event_dir(params, event, item);
+    process_event_dir(monitor, event, item);
   }
 }
 
 /**************************************************************************//**
  * @brief Reset params linked to monitor.
- * @param[in,out] params Monitor parameters.
+ * @param[in,out] monitor Monitor parameters.
  * @return 0=OK, otherwise=KO.
  */
-static void monitor_reset(monitor_t *params)
+void monitor_reset(monitor_t *monitor)
 {
-  if (params == NULL || params->witems == NULL || params->dict == NULL || params->mqueue == NULL) {
+  if (monitor == NULL) {
     assert(false);
     return;
   }
 
-  if (params->ifd >= 0) {
+  if (monitor->ifd > 0) {
     // close dirs and files
-    monitor_rm_watches(params);
+    monitor_rm_watches(monitor);
     // stops inotify
-    close(params->ifd);
+    close(monitor->ifd);
     syslog(LOG_DEBUG, "monitor - inotify stopped");
-    params->ifd = -1;
+    monitor->ifd = 0;
   }
 
-  map_reset(params->dict, NULL);
+  monitor->mqueue = NULL;
+  map_reset(&(monitor->dict), NULL);
+  vector_reset(&(monitor->witems), witem_free);
 }
 
 /**************************************************************************//**
  * @brief Initialize inotify.
+ * @param[in,out] monitor Monitor parameters.
  * @param[in] dirs User defined dir/patterns declared in config file.
- * @param[in,out] params Monitor parameters.
  * @return 0=OK, otherwise=KO.
  */
-int monitor_init(const vector_t *dirs, monitor_t *params)
+int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue)
 {
-  if (dirs == NULL || params == NULL ||
-      params->ifd >= 0 || params->witems == NULL || params->dict == NULL || params->mqueue == NULL ||
-      params->witems->size > 0 || params->dict->size > 0 || params->mqueue->status == MQUEUE_STATUS_UNINITIALIZED) {
+  if (monitor == NULL || dirs == NULL || mqueue == NULL|| mqueue->status == MQUEUE_STATUS_UNINITIALIZED) {
     assert(false);
     return(1);
   }
 
   int rc = 0;
 
-  params->ifd = inotify_init();
-  if (params->ifd < 0) {
+  monitor->witems = (vector_t){0};
+  monitor->dict = (map_t){0};
+  monitor->mqueue = mqueue;
+
+  monitor->ifd = inotify_init();
+  if (monitor->ifd <= 0) {
     syslog(LOG_CRIT, "monitor - %s", strerror(errno));
     rc = EXIT_FAILURE;
     goto monitor_init_err;
   }
-  syslog(LOG_DEBUG, "monitor - inotify started");
+  syslog(LOG_DEBUG, "monitor - inotify started [fd=%d]", monitor->ifd);
 
   // add files declared in config file
-  monitor_add_dirs(params, dirs);
-  if (params->dict->size == 0) {
+  monitor_add_dirs(monitor, dirs);
+  if (monitor->dict.size == 0) {
     syslog(LOG_ERR, "monitor - no items to monitor");
     rc = EXIT_FAILURE;
     goto monitor_init_err;
@@ -550,7 +550,7 @@ int monitor_init(const vector_t *dirs, monitor_t *params)
   return(EXIT_SUCCESS);
 
 monitor_init_err:
-  monitor_reset(params);
+  monitor_reset(monitor);
   return(rc);
 }
 
@@ -563,8 +563,8 @@ monitor_init_err:
  */
 void *monitor_run(void *ptr)
 {
-  monitor_t *params = (monitor_t *) ptr;
-  if (params == NULL || params->ifd < 0 || params->witems == NULL || params->dict == NULL || params->mqueue == NULL) {
+  monitor_t *monitor = (monitor_t *) ptr;
+  if (monitor == NULL || monitor->ifd <= 0 || monitor->mqueue == NULL) {
     assert(false);
     return(NULL);
   }
@@ -581,10 +581,10 @@ void *monitor_run(void *ptr)
 
   syslog(LOG_DEBUG, "monitor - thread started");
 
-  while(params->dict->size > 0 && keep_running)
+  while(monitor->dict.size > 0 && keep_running)
   {
     // wait for inotify events
-    ssize_t len = read(params->ifd, buffer, sizeof(buffer));
+    ssize_t len = read(monitor->ifd, buffer, sizeof(buffer));
     if (len < 0) {
       if (errno != EINTR) {
         syslog(LOG_ERR, "monitor - %s", strerror(errno));
@@ -598,14 +598,12 @@ void *monitor_run(void *ptr)
       if (event->wd < 0 || event->mask & IN_Q_OVERFLOW) {
         continue;
       }
-      process_event(params, event);
+      process_event(monitor, event);
     }
   }
 
   // notifies that there are no more messages
-  mqueue_close(params->mqueue);
-  // release structs used uniquely by monitor
-  monitor_reset(params);
+  mqueue_close(monitor->mqueue);
 
   syslog(LOG_DEBUG, "monitor - thread ended");
   return(NULL);

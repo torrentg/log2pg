@@ -71,9 +71,9 @@ typedef struct database_t
 /**************************************************************************
  * Function declarations.
  */
-extern int database_init(database_t *db, const config_t *cfg, vector_t *tables);
-extern void database_reset(database_t *db);
+extern int database_init(database_t *database, const config_t *cfg, vector_t *tables, mqueue_t *mqueue);
 extern void* database_run(void *ptr);
+extern void database_reset(database_t *database);
 
 #endif
 
