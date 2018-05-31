@@ -20,6 +20,7 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <string.h>
 #include <stdlib.h>
 #define SYSLOG_NAMES

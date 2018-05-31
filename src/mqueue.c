@@ -20,6 +20,7 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
@@ -30,9 +31,6 @@
 #include <assert.h>
 #include "utils.h"
 #include "mqueue.h"
-
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define INITIAL_CAPACITY 8
 #define RESIZE_FACTOR 2

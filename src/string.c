@@ -20,6 +20,7 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -27,8 +28,6 @@
 #include "string.h"
 
 #define RESIZE_FACTOR 2
-
-#define MAX(a,b) (((a)>(b))?(a):(b))
 
 /**************************************************************************//**
  * @brief Resize a string.

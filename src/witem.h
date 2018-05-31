@@ -23,7 +23,9 @@
 #ifndef WITEM_H
 #define WITEM_H
 
+#include "log2pg.h"
 #include <stdio.h>
+#include <pcre2.h>
 #include "vector.h"
 #include "entities.h"
 

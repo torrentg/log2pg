@@ -20,6 +20,7 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
@@ -30,8 +31,6 @@
 #include "wdata.h"
 #include "utils.h"
 #include "database.h"
-
-#define MIN(a,b) (((a)<(b))?(a):(b))
 
 #define MAX_NUM_PARAMS 100
 
@@ -60,9 +59,6 @@ static const char *TS_PARAMS[] = {
     TS_PARAM_IDLE_TIMEOUT,
     NULL
 };
-
-// external declarations
-extern void terminate(void);
 
 /**************************************************************************//**
  * @brief Close connection to database.

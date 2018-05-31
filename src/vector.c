@@ -20,6 +20,7 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +29,6 @@
 
 #define INITIAL_CAPACITY 1
 #define RESIZE_FACTOR 2
-#define MIN(a,b) (((a)<(b))?(a):(b))
 
 /**************************************************************************//**
  * @brief Reset list content (frees content but not object).

@@ -20,21 +20,18 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
 #include <syslog.h>
-#define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 #include <assert.h>
 #include "string.h"
 #include "witem.h"
 #include "wdata.h"
 #include "processor.h"
-
-// external declarations
-extern void terminate(void);
 
 /**************************************************************************//**
  * @brief Initialize the processor.

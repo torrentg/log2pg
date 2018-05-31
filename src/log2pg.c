@@ -20,6 +20,7 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <stdio.h>
 #include <getopt.h>
 #include <signal.h>
@@ -41,11 +42,8 @@
 #include "processor.h"
 #include "database.h"
 
-#define PACKAGE_NAME "log2pg"
-#define PACKAGE_VERSION "0.1.0"
 #define DEFAULT_CONFIG_FILE "/etc/" PACKAGE_NAME ".conf"
 #define QUEUE2_MAX_CAPACITY 32000
-#define UNUSED(x) (void)(x)
 
 // public variables
 volatile sig_atomic_t keep_running = 1;

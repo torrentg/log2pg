@@ -20,43 +20,38 @@
 //
 //===========================================================================
 
-#ifndef FORMATS_H
-#define FORMATS_H
+#ifndef LOG2PG_H
+#define LOG2PG_H
 
-#include "log2pg.h"
-#include <stddef.h>
-#include <libconfig.h>
-#include <pcre2.h>
-#include "vector.h"
-
-
-
-/**************************************************************************//**
- * @brief Format defined in configuration file.
- * @details First member is 'char *' to be searchable.
- * @see https://www.pcre.org/current/doc/html/pcre2api.html
- */
-typedef struct format_t
-{
-  //! Format name.
-  char *name;
-  //! Maximum length.
-  size_t maxlength;
-  //! Regular expression.
-  pcre2_code *re_starts;
-  //! Regular expression.
-  pcre2_code *re_ends;
-  //! Regular expression.
-  pcre2_code *re_values;
-  //! Format parameters (strings).
-  vector_t parameters;
-} format_t;
+#include <signal.h>
 
 /**************************************************************************
- * Function declarations.
+ * Required by PCRE2.
  */
-extern int formats_init(vector_t *lst, const config_t *cfg);
-extern void format_free(void *obj);
+#define PCRE2_CODE_UNIT_WIDTH 8
+
+/**************************************************************************
+ * Public values.
+ */
+#define PACKAGE_NAME "log2pg"
+#define PACKAGE_VERSION "0.1.0"
+
+/**************************************************************************
+ * Public macros.
+ */
+#define UNUSED(x) ((void)(x))
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
+/**************************************************************************
+ * Public variables.
+ */
+extern volatile sig_atomic_t keep_running;
+
+/**************************************************************************
+ * Public functions.
+ */
+extern void terminate(void);
 
 #endif
 

@@ -20,6 +20,7 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <glob.h>
 #include <stdlib.h>
 #include <string.h>

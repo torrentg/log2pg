@@ -20,6 +20,7 @@
 //
 //===========================================================================
 
+#include "log2pg.h"
 #include <glob.h>
 #include <syslog.h>
 #include <unistd.h>
@@ -41,22 +42,18 @@
 #  define ALIGNAS(TYPE) /* empty */
 #endif
 
-#define UNUSED(x) (void)(x)
 #define EVENT_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
 #define BUFFER_LEN (256*(EVENT_SIZE))
-
-// external declarations
-extern volatile sig_atomic_t keep_running;
 
 /**************************************************************************//**
  * @brief Inotify codes.
  */
-typedef struct _code {
+typedef struct code_t {
   const char *name;
   int value;
-} CODE;
+} code_t;
 
-static CODE eventnames[] = {
+static code_t eventnames[] = {
   { "ACCESS", IN_ACCESS },
   { "MODIFY", IN_MODIFY },
   { "ATTRIB", IN_ATTRIB },
@@ -289,7 +286,7 @@ static void trace_event(const struct inotify_event *event, witem_t *item)
   assert(event != NULL);
 
   const char *aux = NULL;
-  CODE *code = eventnames;
+  code_t *code = eventnames;
   while(1) {
     if (code->name == NULL) {
       break;
