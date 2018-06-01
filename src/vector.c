@@ -33,42 +33,42 @@
 /**************************************************************************//**
  * @brief Reset list content (frees content but not object).
  * @details If item_free function is not NULL then deallocs all items.
- * @param[in,out] lst List to reset.
+ * @param[in,out] vector List to reset.
  * @param[in] item_free Function to free an item (can be NULL).
  */
-void vector_reset(vector_t *lst, void (*item_free)(void*))
+void vector_reset(vector_t *vector, void (*item_free)(void*))
 {
-  if (lst == NULL) return;
-  if (lst->data != NULL && item_free != NULL) {
-    for(size_t i=0; i<lst->size; i++) {
-      if (lst->data[i] != NULL) {
-        item_free(lst->data[i]);
+  if (vector == NULL) return;
+  if (vector->data != NULL && item_free != NULL) {
+    for(size_t i=0; i<vector->size; i++) {
+      if (vector->data[i] != NULL) {
+        item_free(vector->data[i]);
       }
     }
   }
-  free(lst->data);
-  lst->data = NULL;
-  lst->size = 0;
-  lst->capacity = 0;
+  free(vector->data);
+  vector->data = NULL;
+  vector->size = 0;
+  vector->capacity = 0;
 }
 
 /**************************************************************************//**
  * @brief Returns the position of the item having the given name.
  * @details Assumes that vector objects are structs where first field is a 'char *'.
- * @param[in] lst List of objects.
+ * @param[in] vector List of objects.
  * @param[in] value Searched values (can be null).
  * @return Index of the requested item, negative value if not found.
  */
-int vector_find(const vector_t *lst, const char *value)
+int vector_find(const vector_t *vector, const char *value)
 {
-  assert(lst != NULL);
-  if (lst == NULL || lst->data == NULL) {
+  assert(vector != NULL);
+  if (vector == NULL || vector->data == NULL) {
     return -1;
   }
 
-  for(size_t i=0; i<lst->size; i++) {
-    if (lst->data[i] == NULL) continue;
-    char **str = (char **) lst->data[i];
+  for(size_t i=0; i<vector->size; i++) {
+    if (vector->data[i] == NULL) continue;
+    char **str = (char **) vector->data[i];
     if ((*str == NULL && value == NULL) ||
         (*str != NULL && strcmp(*str, value) == 0))
     {
@@ -81,18 +81,18 @@ int vector_find(const vector_t *lst, const char *value)
 
 /**************************************************************************//**
  * @brief Check if list contains the given object.
- * @param[in] lst List of objects.
+ * @param[in] vector List of objects.
  * @param[in] obj Object to search.
  * @return Index of the requested item, negative value if not found.
  */
-bool vector_contains(const vector_t *lst, const void *obj)
+bool vector_contains(const vector_t *vector, const void *obj)
 {
-  if (lst == NULL || lst->data == NULL) {
+  if (vector == NULL || vector->data == NULL) {
     return false;
   }
 
-  for(size_t i=0; i<lst->size; i++) {
-    if (lst->data[i] == obj) return(true);
+  for(size_t i=0; i<vector->size; i++) {
+    if (vector->data[i] == obj) return(true);
   }
 
   return(false);
@@ -100,55 +100,55 @@ bool vector_contains(const vector_t *lst, const void *obj)
 
 /**************************************************************************//**
  * @brief Resize a vector.
- * @param[in,out] lst List of objects.
+ * @param[in,out] vector List of objects.
  * @param[in] new_size The new list capacity.
  * @return 0=OK, 1=KO.
  */
-static int vector_resize(vector_t *lst, size_t new_capacity)
+static int vector_resize(vector_t *vector, size_t new_capacity)
 {
-  void **tmp = (void**) realloc(lst->data, (new_capacity)*sizeof(void*));
+  void **tmp = (void**) realloc(vector->data, (new_capacity)*sizeof(void*));
   if (tmp == NULL) {
     return(1);
   }
 
-  for(size_t i=lst->size; i<new_capacity; i++) {
+  for(size_t i=vector->size; i<new_capacity; i++) {
     tmp[i] = NULL;
   }
-  lst->data = tmp;
-  lst->size = MIN(lst->size, new_capacity);
-  lst->capacity = new_capacity;
+  vector->data = tmp;
+  vector->size = MIN(vector->size, new_capacity);
+  vector->capacity = new_capacity;
   return(0);
 }
 
 /**************************************************************************//**
  * @brief Inserts an item at the end of the list.
- * @param[in,out] lst List of objects.
+ * @param[in,out] vector List of objects.
  * @param[in] obj Item to append (can be NULL).
  * @return 0=OK, otherwise=not appended.
  */
-int vector_insert(vector_t *lst, void *obj)
+int vector_insert(vector_t *vector, void *obj)
 {
-  assert(lst != NULL);
-  assert(lst->size <= lst->capacity);
-  if (lst == NULL) {
+  assert(vector != NULL);
+  assert(vector->size <= vector->capacity);
+  if (vector == NULL) {
     return(1);
   }
 
   int rc = 0;
 
-  if (lst->data == NULL || lst->capacity == 0) {
-    lst->size = 0;
-    lst->capacity = 0;
-    rc = vector_resize(lst, INITIAL_CAPACITY);
+  if (vector->data == NULL || vector->capacity == 0) {
+    vector->size = 0;
+    vector->capacity = 0;
+    rc = vector_resize(vector, INITIAL_CAPACITY);
   }
-  else if (lst->size == lst->capacity) {
-    rc = vector_resize(lst, RESIZE_FACTOR*lst->capacity);
+  else if (vector->size == vector->capacity) {
+    rc = vector_resize(vector, RESIZE_FACTOR*vector->capacity);
   }
 
   if (rc == 0) {
-    assert(lst->size < lst->capacity);
-    lst->data[lst->size] = obj;
-    lst->size++;
+    assert(vector->size < vector->capacity);
+    vector->data[vector->size] = obj;
+    vector->size++;
   }
 
   return(rc);
@@ -156,53 +156,78 @@ int vector_insert(vector_t *lst, void *obj)
 
 /**************************************************************************//**
  * @brief Remove object from list.
- * @param[in,out] lst List of objects.
+ * @param[in,out] vector List of objects.
  * @param[in] pos Position of the object to remove.
  * @param[in] item_free Function to free an item (can be NULL).
  * @return 0=OK, 1=KO.
  */
-int vector_remove(vector_t *lst, int pos, void (*item_free)(void *))
+int vector_remove(vector_t *vector, int pos, void (*item_free)(void *))
 {
-  assert(lst != NULL);
-  assert(lst->size <= lst->capacity);
-  assert(pos >= 0);
-  assert(pos < (int)lst->size);
-  if (lst == NULL || pos < 0 || (int)lst->size <= pos) {
+  if (vector == NULL || pos < 0 || (int)vector->size <= pos) {
+    assert(false);
     return(1);
   }
 
-  if (lst->data != NULL && item_free != NULL) {
-    item_free(lst->data[pos]);
+  if (vector->data != NULL && item_free != NULL) {
+    item_free(vector->data[pos]);
   }
 
-  lst->data[pos] = NULL;
-  if (pos < (int)(lst->size)-1) {
-    memmove(lst->data+pos, lst->data+pos+1, (lst->size-1-pos)*sizeof(void *));
+  vector->data[pos] = NULL;
+  if (pos < (int)(vector->size)-1) {
+    memmove(vector->data+pos, vector->data+pos+1, (vector->size-1-pos)*sizeof(void *));
   }
-  lst->size--;
+  vector->size--;
 
+  return(0);
+}
+
+/**************************************************************************//**
+ * @brief Remove all objects from list (preserving capacity).
+ * @param[in,out] vector List of objects.
+ * @param[in] item_free Function to free an item (can be NULL).
+ * @return 0=OK, 1=KO.
+ */
+int vector_clear(vector_t *vector, void (*item_free)(void *))
+{
+  if (vector == NULL) {
+    assert(false);
+    return(1);
+  }
+
+  if (vector->data == NULL || vector->size == 0) {
+    return(0);
+  }
+
+  for(size_t i=0; i<vector->size; i++) {
+    if (vector->data[i] != NULL && item_free != NULL) {
+      item_free(vector->data[i]);
+    }
+    vector->data[i] = NULL;
+  }
+
+  vector->size = 0;
   return(0);
 }
 
 /**************************************************************************//**
  * @brief Request a change in capacity.
  * @details Requests that the vector capacity be at least enough to contain n elements.
- * @param[in,out] lst List of objects.
+ * @param[in,out] vector List of objects.
  * @param[in] capacity Minimum capacity for the vector.
  * @return 0=OK, 1=KO.
  */
-int vector_reserve(vector_t *lst, size_t capacity)
+int vector_reserve(vector_t *vector, size_t capacity)
 {
-  if (lst == NULL) {
+  if (vector == NULL) {
     assert(false);
     return(1);
   }
 
-  if (capacity <= lst->capacity) {
+  if (capacity <= vector->capacity) {
     return(0);
   }
 
-  return vector_resize(lst, capacity);
+  return vector_resize(vector, capacity);
 }
 
 /**************************************************************************//**
@@ -210,19 +235,19 @@ int vector_reserve(vector_t *lst, size_t capacity)
  * @details Assumes that vector objects are strings.
  *          Memory for the returned string is obtained with calloc, and
  *          can be freed with free(3).
- * @param[in,out] lst List of strings.
+ * @param[in,out] vector List of strings.
  * @return String representing the vector contents, NULL if error.
  */
-char* vector_print(const vector_t *lst)
+char* vector_print(const vector_t *vector)
 {
-  if (lst == NULL) {
+  if (vector == NULL) {
     assert(false);
     return(NULL);
   }
 
   size_t len = 2; // initial '[' + ending  ']'
-  for (size_t i=0; i<lst->size; i++) {
-    len += strlen((char*)(lst->data[i])) + 2; // ', ' takes 2 places
+  for (size_t i=0; i<vector->size; i++) {
+    len += strlen((char*)(vector->data[i])) + 2; // ', ' takes 2 places
   }
 
   char *ret = (char *) calloc(len, sizeof(char));
@@ -232,10 +257,10 @@ char* vector_print(const vector_t *lst)
 
   char *ptr = ret+1;
   sprintf(ret, "[");
-  for (size_t i=0; i<lst->size; i++) {
-    sprintf(ptr, "%s", (char*)(lst->data[i]));
-    ptr += strlen((char*)(lst->data[i]));
-    if (i+1<lst->size) {
+  for (size_t i=0; i<vector->size; i++) {
+    sprintf(ptr, "%s", (char*)(vector->data[i]));
+    ptr += strlen((char*)(vector->data[i]));
+    if (i+1<vector->size) {
       sprintf(ptr, ", ");
       ptr += 2;
     }

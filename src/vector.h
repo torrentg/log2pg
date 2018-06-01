@@ -42,13 +42,14 @@ typedef struct vector_t
 /**************************************************************************
  * Function declarations.
  */
-extern int vector_find(const vector_t *lst, const char *value);
-extern bool vector_contains(const vector_t *lst, const void *obj);
-extern int vector_insert(vector_t *lst, void *obj);
-extern int vector_remove(vector_t *lst, int pos, void (*item_free)(void *));
-extern void vector_reset(vector_t *lst, void (*item_free)(void*));
-extern char* vector_print(const vector_t *lst);
-extern int vector_reserve(vector_t *lst, size_t capacity);
+extern int vector_find(const vector_t *vector, const char *value);
+extern bool vector_contains(const vector_t *vector, const void *obj);
+extern int vector_insert(vector_t *vector, void *obj);
+extern int vector_remove(vector_t *vector, int pos, void (*item_free)(void *));
+extern int vector_clear(vector_t *vector, void (*item_free)(void *));
+extern void vector_reset(vector_t *vector, void (*item_free)(void*));
+extern char* vector_print(const vector_t *vector);
+extern int vector_reserve(vector_t *vector, size_t capacity);
 
 #endif
 
