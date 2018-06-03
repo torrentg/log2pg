@@ -133,7 +133,8 @@ int init_config(config_t *cfg, const char *filename)
 
   int rc = config_read_file(cfg, filename);
   if (rc == CONFIG_FALSE) {
-     fprintf(stderr, "Error: %s at %s:%d.\n", config_error_text(cfg), config_error_file(cfg), config_error_line(cfg));
+     fprintf(stderr, "Error: %s at %s:%d.\n", config_error_text(cfg),
+             config_error_file(cfg), config_error_line(cfg));
      return(EXIT_FAILURE);
   }
 

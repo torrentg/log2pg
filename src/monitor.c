@@ -513,6 +513,7 @@ void monitor_reset(monitor_t *monitor)
  * @brief Initialize inotify.
  * @param[in,out] monitor Monitor parameters.
  * @param[in] dirs User defined dir/patterns declared in config file.
+ * @param[in] mqueue Message queue (monitor -> processor).
  * @return 0=OK, otherwise=KO.
  */
 int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue)

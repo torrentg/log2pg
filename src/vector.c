@@ -26,6 +26,7 @@
 #include <string.h>
 #include <assert.h>
 #include "vector.h"
+#include "utils.h"
 
 #define INITIAL_CAPACITY 1
 #define RESIZE_FACTOR 2
@@ -128,9 +129,8 @@ static int vector_resize(vector_t *vector, size_t new_capacity)
  */
 int vector_insert(vector_t *vector, void *obj)
 {
-  assert(vector != NULL);
-  assert(vector->size <= vector->capacity);
-  if (vector == NULL) {
+  if (vector == NULL || vector->size > vector->capacity) {
+    assert(false);
     return(1);
   }
 
@@ -267,4 +267,41 @@ char* vector_print(const vector_t *vector)
   }
   sprintf(ptr, "]");
   return(ret);
+}
+
+/**************************************************************************//**
+ * @brief Return a new vector with the same content.
+ * @param[in] vector Vector to clone.
+ * @return The cloned vector, empty vector if error.
+ */
+vector_t vector_clone(const vector_t *vector)
+{
+  vector_t ret = {0};
+
+  if (vector->data != NULL && vector->capacity > 0 && vector->size > 0) {
+    ret.data = memdup(vector->data, vector->size);
+    if (ret.data != NULL) {
+      ret.size = vector->size;
+      ret.capacity = vector->size;
+    }
+  }
+
+  return(ret);
+}
+
+/**************************************************************************//**
+ * @brief Swap vector contents.
+ * @param[in,out] vector1 First vector (not NULL).
+ * @param[in,out] vector2 Second vector (not NULL).
+ */
+void vector_swap(vector_t *vector1, vector_t *vector2)
+{
+  if (vector1 == NULL || vector2 == NULL) {
+    assert(false);
+    return;
+  }
+
+  vector_t aux = *vector1;
+  *vector1 = *vector2;
+  *vector2 = aux;
 }

@@ -36,7 +36,7 @@ typedef enum {
   DB_STATUS_UNINITIALIZED = 0, // Database not initialized.
   DB_STATUS_CONNECTED,         // Database connected + no transaction in progress.
   DB_STATUS_TRANSACTION,       // Database connected + transaction in progress.
-  DB_STATUS_ERRCON             // Database connection error (can be connected or not).
+  DB_STATUS_ERROR              // Database error (eg. connection, prepared stament).
 } db_status_e;
 
 /**************************************************************************//**
@@ -48,24 +48,28 @@ typedef struct database_t
   mqueue_t *mqueue;
   //! Database status.
   db_status_e status;
-  //! Database connection
+  //! Database connection.
   PGconn *conn;
   //! Database connection string.
   char *conn_str;
-  //! Connection lost retry interval (in millis)
+  //! Connection lost retry interval (in millis).
   size_t retryinterval;
-  //! Maximum number of inserts per transaction
+  //! MAximum number of failed reconnections.
+  size_t maxfailsrecon;
+  //! Maximum number of inserts per transaction.
   size_t ts_maxinserts;
-  //! Maximum transaction duration (in millis)
+  //! Maximum transaction duration (in millis).
   size_t ts_maxduration;
-  //! Maximum transaction idle time (in millis)
+  //! Maximum transaction idle time (in millis).
   size_t ts_idletimeout;
-  //! Transaction starting time (0 means no transaction in progress).
+  //! Transaction starting time.
   struct timeval ts_timeval;
   //! Number of inserts pending to commit.
   size_t ts_numinserts;
   //! List of tables.
   vector_t *tables;
+  //! List of wdata pending to commit.
+  vector_t pending;
 } database_t;
 
 /**************************************************************************

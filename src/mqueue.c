@@ -469,7 +469,7 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
   assert(mqueue->status == MQUEUE_STATUS_NOTEMPTY);
 
   // retrieve the item in a safe way
-  msg_t ret = msg_create(MSG_TYPE_NULL, NULL);
+  msg_t ret;
   pthread_mutex_lock(&(mqueue->mutex));
 
   ret = mqueue->buffer[mqueue->pos1];

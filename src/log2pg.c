@@ -36,8 +36,6 @@
 #include "vector.h"
 #include "mqueue.h"
 #include "entities.h"
-#include "map.h"
-#include "witem.h"
 #include "monitor.h"
 #include "processor.h"
 #include "database.h"
@@ -45,18 +43,22 @@
 #define DEFAULT_CONFIG_FILE "/etc/" PACKAGE_NAME ".conf"
 #define QUEUE2_MAX_CAPACITY 32000
 
-// public variables
+/**************************************************************************
+ * Public variables.
+ */
 volatile sig_atomic_t keep_running = 1;
 volatile pthread_t *thread1 = NULL;
+int rc = EXIT_SUCCESS;
 
 /**************************************************************************//**
  * @brief Force exit sending a signal to monitor thread.
  * @details Linked to catchsignal.
  */
-void terminate(void)
+void terminate(int exitcode)
 {
   if (keep_running > 0 && thread1 != NULL) {
     pthread_kill(*thread1, SIGINT);
+    rc = exitcode;
   }
 }
 
@@ -145,7 +147,6 @@ void version(void)
  */
 int run(const char *filename)
 {
-  int rc = EXIT_SUCCESS;
   char *syslog_tag = NULL;
   config_t cfg = {0};
   vector_t formats = {0};

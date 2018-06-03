@@ -185,7 +185,7 @@ static void process_buffer(processor_t *params, witem_t *item)
   int lpm1 = 0; // length previous match1 (only applies in case only-starts)
   int pos1 = 0; // current chunk starts (relative to str)
   int pos2 = 0; // current chunk ends (relative to str)
-  const char *str_chunk = item->buffer;
+  const char *str_chunk = NULL;
   size_t len_chunk = 0;
 
   while(len > 0)
@@ -293,10 +293,15 @@ void* processor_run(void *ptr)
 
   while(true)
   {
+    // waiting for a new message
     msg_t msg = mqueue_pop(params->mqueue1, 0);
 
-    if (msg.type == MSG_TYPE_ERROR || msg.type == MSG_TYPE_CLOSE) {
-      terminate();
+    // processing message
+    if (msg.type == MSG_TYPE_ERROR) {
+      terminate(EXIT_FAILURE);
+      break;
+    }
+    else if(msg.type == MSG_TYPE_CLOSE) {
       break;
     }
     else if (msg.type == MSG_TYPE_EINTR || msg.type == MSG_TYPE_NULL) {

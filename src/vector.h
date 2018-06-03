@@ -50,6 +50,8 @@ extern int vector_clear(vector_t *vector, void (*item_free)(void *));
 extern void vector_reset(vector_t *vector, void (*item_free)(void*));
 extern char* vector_print(const vector_t *vector);
 extern int vector_reserve(vector_t *vector, size_t capacity);
+extern vector_t vector_clone(const vector_t *vector);
+extern void vector_swap(vector_t *vector1, vector_t *vector2);
 
 #endif
 

@@ -208,3 +208,20 @@ size_t elapsed_millis(const struct timeval *t1)
 
   return (size_t)(d.tv_sec*1000) + (size_t)(d.tv_usec)/1000;
 }
+
+/**************************************************************************//**
+ * @brief Duplicates memory content (generic strdup).
+ * @param[in] ptr Pointer to content to duplicate.
+ * @param[in] size Length of content in bytes.
+ * @return Pointer to duplicated content.
+ */
+void* memdup(const void* ptr, size_t size)
+{
+  void* ret = malloc(size);
+
+  if(ret != NULL) {
+    memcpy(ret, ptr, size);
+  }
+
+  return ret;
+}
