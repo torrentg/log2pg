@@ -42,9 +42,9 @@ typedef struct stringbuf_t
 /**************************************************************************
  * Function declarations.
  */
-extern int string_append(stringbuf_t *obj, const char *str);
-extern int string_append_n(stringbuf_t *obj, const char *str, size_t len);
-extern void string_reset(stringbuf_t *obj);
-int string_replace(stringbuf_t *obj, const char *from, const char *to);
+extern int stringbuf_append(stringbuf_t *obj, const char *str);
+extern int stringbuf_append_n(stringbuf_t *obj, const char *str, size_t len);
+extern void stringbuf_reset(stringbuf_t *obj);
+int stringbuf_replace(stringbuf_t *obj, const char *from, const char *to);
 
 #endif

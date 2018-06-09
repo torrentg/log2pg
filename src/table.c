@@ -29,6 +29,7 @@
 #include <assert.h>
 #include "config.h"
 #include "table.h"
+#include "stringbuf.h"
 
 #define TABLE_PARAM_NAME "name"
 #define TABLE_PARAM_SQL "sql"
@@ -132,38 +133,6 @@ void table_free(void *ptr)
 }
 
 /**************************************************************************//**
- * @brief Replace :parameter by $num in the sql string.
- * @details Assumes that sql has enough space if len(parameter)<len(num).
- * @param[in,out] sql String to modify.
- * @param[in] parameter Parameter (without ':').
- * @param[in] num Number to assign.
- */
-static void sql_replace(char *sql, const char *parameter, size_t num)
-{
-  assert(sql != NULL);
-  assert(parameter != NULL);
-  assert(num > 0);
-
-  char str1[PARAMETER_MAX_SIZE+2];
-  str1[0] = PARAMETER_PREFIX;
-  strncpy(str1+1, parameter, PARAMETER_MAX_SIZE);
-  size_t len1 = strlen(str1);
-
-  char str2[6];
-  sprintf(str2, "$%zd", num);
-  size_t len2 = strlen(str2);
-
-  char *ptr = sql;
-  while((ptr=strstr(ptr, str1)) != NULL)
-  {
-    size_t len = strlen(ptr);
-    memmove(ptr+len2, ptr+len1, len-len1+1);
-    strncpy(ptr, str2, len2);
-    ptr += len2;
-  }
-}
-
-/**************************************************************************//**
  * @brief Replace parameters (':') by numeric identifiers ('$').
  * @example 'values(:timestamp, :msg)' -> 'values($1, $2)'
  * @param[in] table Table object.
@@ -176,17 +145,21 @@ char* table_get_stmt(const table_t *table)
     return(NULL);
   }
 
-  // additional length to avoid :a...:z -> $1...$24
-  size_t len = strlen(table->sql);
-  char *ret = (char *) calloc(len+table->parameters.size+1, sizeof(char));
-  strncpy(ret, table->sql, len+1);
+  stringbuf_t ret = {0};
+  char param_name[PARAMETER_MAX_SIZE+2] = {0};
+  char param_id[6] = {0};
 
-  // performs the replacement
+  stringbuf_append(&ret, table->sql);
+  param_name[0] = ':';
+
+  // performs the replacement (:variable -> $1)
   for(size_t i=0; i<table->parameters.size; i++) {
-    sql_replace(ret, (char*)(table->parameters.data[i]), i+1);
+    sprintf(param_id, "$%zu", i+1);
+    strncpy(param_name+1, (char*)(table->parameters.data[i]), PARAMETER_MAX_SIZE);
+    stringbuf_replace(&ret, param_name, param_id);
   }
 
-  return(ret);
+  return(ret.data);
 }
 
 /**************************************************************************//**

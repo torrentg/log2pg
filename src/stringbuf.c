@@ -36,7 +36,7 @@
  * @param[in] new_capacity The new string capacity.
  * @return true=OK, false=KO.
  */
-static bool string_resize(stringbuf_t *obj, size_t new_capacity)
+static bool stringbuf_resize(stringbuf_t *obj, size_t new_capacity)
 {
   assert(obj != NULL);
   assert(obj->capacity < new_capacity);
@@ -59,7 +59,7 @@ static bool string_resize(stringbuf_t *obj, size_t new_capacity)
  * @param len Content length
  * @return 0=OK, 1=KO.
  */
-int string_append_n(stringbuf_t *obj, const char *str, size_t len)
+int stringbuf_append_n(stringbuf_t *obj, const char *str, size_t len)
 {
   assert(obj != NULL);
   assert(obj->data != NULL || obj->capacity == 0);
@@ -72,7 +72,7 @@ int string_append_n(stringbuf_t *obj, const char *str, size_t len)
 
   if (obj->capacity < obj->length + len + 1) {
     size_t new_capacity = MAX(RESIZE_FACTOR*obj->capacity, obj->length+len+1);
-    if (!string_resize(obj, new_capacity)) {
+    if (!stringbuf_resize(obj, new_capacity)) {
       return(1);
     }
   }
@@ -91,16 +91,16 @@ int string_append_n(stringbuf_t *obj, const char *str, size_t len)
  * @param[in] str Content to append.
  * @return 0=OK, 1=KO.
  */
-int string_append(stringbuf_t *obj, const char *str)
+int stringbuf_append(stringbuf_t *obj, const char *str)
 {
-  return string_append_n(obj, str, strlen(str));
+  return stringbuf_append_n(obj, str, strlen(str));
 }
 
 /**************************************************************************//**
  * @brief Reset string content (frees content but not object).
  * @param[in,out] obj String to reset.
  */
-void string_reset(stringbuf_t *obj)
+void stringbuf_reset(stringbuf_t *obj)
 {
   if (obj == NULL) return;
   free(obj->data);
@@ -117,7 +117,7 @@ void string_reset(stringbuf_t *obj)
  * @param[in] to Substring to put in place of from (can be NULL = '').
  * @return Number of replacements done, negative value if error.
  */
-int string_replace(stringbuf_t *obj, const char *from, const char *to)
+int stringbuf_replace(stringbuf_t *obj, const char *from, const char *to)
 {
   if (obj == NULL || from == NULL) {
     assert(false);
@@ -152,7 +152,7 @@ int string_replace(stringbuf_t *obj, const char *from, const char *to)
   size_t required_len = obj->length + count*(len2-len1);
   if (required_len+1 > obj->capacity) {
     size_t new_capacity = MAX(RESIZE_FACTOR*obj->capacity, required_len+1);
-    if(!string_resize(obj, new_capacity)) {
+    if(!stringbuf_resize(obj, new_capacity)) {
       return(-1);
     }
   }

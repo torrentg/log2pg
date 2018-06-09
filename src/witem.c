@@ -209,29 +209,29 @@ char* witem_discard_filename(const witem_t *item)
   }
 
   stringbuf_t ret = {0};
-  string_append(&ret, discard);
+  stringbuf_append(&ret, discard);
 
   if (strstr(ret.data, "$REALPATH") != NULL) {
     char *value = realpath(filename, NULL);
-    string_replace(&ret, "$REALPATH", value);
+    stringbuf_replace(&ret, "$REALPATH", value);
     free(value);
   }
 
   if (strstr(ret.data, "$EXTENSION") != NULL) {
-    string_replace(&ret, "$EXTENSION", filename_ext(filename));
+    stringbuf_replace(&ret, "$EXTENSION", filename_ext(filename));
   }
 
   if (strstr(ret.data, "$FILENAME") != NULL) {
     char *buf = strdup(filename);
     char *value = basename(buf);
-    string_replace(&ret, "$FILENAME", value);
+    stringbuf_replace(&ret, "$FILENAME", value);
     free(buf);
   }
 
   if (strstr(ret.data, "$DIRNAME") != NULL) {
     char *buf = strdup(filename);
     char *value = dirname(buf);
-    string_replace(&ret, "$DIRNAME", value);
+    stringbuf_replace(&ret, "$DIRNAME", value);
     free(buf);
   }
 
@@ -242,7 +242,7 @@ char* witem_discard_filename(const witem_t *item)
     if (dot != NULL) {
       *dot = '\0';
     }
-    string_replace(&ret, "$BASENAME", value);
+    stringbuf_replace(&ret, "$BASENAME", value);
     free(buf);
   }
 

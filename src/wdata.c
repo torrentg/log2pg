@@ -59,24 +59,24 @@ static char* wdata_values_str(witem_t *item, const char *str)
 
   assert(table->parameters.size == item->num_params);
 
-  string_append(&ret, "[");
+  stringbuf_append(&ret, "[");
 
   for(size_t i=0; i<table->parameters.size; i++)
   {
     if (ret.length > 1) {
-      string_append(&ret, ", ");
+      stringbuf_append(&ret, ", ");
     }
 
-    string_append(&ret, table->parameters.data[i]);
-    string_append(&ret, "=");
+    stringbuf_append(&ret, table->parameters.data[i]);
+    stringbuf_append(&ret, "=");
     size_t j= item->param_pos[i];
     size_t pos = ovector[2*(j+1)];
     int len = (int)(ovector[2*(j+1)+1] - ovector[2*(j+1)]);
     assert(len > 0);
-    string_append_n(&ret, str+pos, len);
+    stringbuf_append_n(&ret, str+pos, len);
   }
 
-  string_append(&ret, "]");
+  stringbuf_append(&ret, "]");
   return(ret.data);
 }
 

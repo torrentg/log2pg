@@ -129,7 +129,7 @@ static bool database_prepare_stmt(database_t *database, table_t *table)
     done = false;
   }
   else {
-    syslog(LOG_DEBUG, "database - prepared statement '%s' created", table->name);
+    syslog(LOG_DEBUG, "database - prepared statement '%s' created: %s", table->name, query);
   }
 
   free(query);

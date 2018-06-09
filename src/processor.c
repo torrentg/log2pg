@@ -169,26 +169,26 @@ static void trace_chunk_values(const char *str, pcre2_match_data *md, const form
   stringbuf_t aux = {0};
   PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);
 
-  string_append(&aux, "[");
+  stringbuf_append(&aux, "[");
 
   for(size_t i=0; i<format->parameters.size; i++)
   {
     if (aux.length > 1) {
-      string_append(&aux, ", ");
+      stringbuf_append(&aux, ", ");
     }
 
-    string_append(&aux, format->parameters.data[i]);
-    string_append(&aux, "=");
+    stringbuf_append(&aux, format->parameters.data[i]);
+    stringbuf_append(&aux, "=");
     size_t pos = ovector[2*(i+1)];
     int len = (int)(ovector[2*(i+1)+1] - ovector[2*(i+1)]);
     assert(len > 0);
-    string_append_n(&aux, str+pos, len);
+    stringbuf_append_n(&aux, str+pos, len);
   }
 
-  string_append(&aux, "]");
+  stringbuf_append(&aux, "]");
 
   syslog(LOG_DEBUG, "processor - values=%s", aux.data);
-  string_reset(&aux);
+  stringbuf_reset(&aux);
 }
 
 /**************************************************************************//**

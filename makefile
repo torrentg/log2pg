@@ -11,7 +11,7 @@ INC_DIRS := $(shell find $(SRC_DIRS) -type d)
 INC_FLAGS := $(addprefix -iquote,$(INC_DIRS))
 
 CPPFLAGS ?= $(INC_FLAGS) -MMD -MP
-CFLAGS ?= -g -std=gnu11 -Wpedantic -Wextra -Wall
+CFLAGS ?= -O2 -DNDEBUG -std=gnu11 -Wpedantic -Wextra -Wall
 LDFLAGS ?= -lconfig -lpthread -lpq -lpcre2-8
 
 $(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
