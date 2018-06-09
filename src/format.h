@@ -20,8 +20,8 @@
 //
 //===========================================================================
 
-#ifndef FORMATS_H
-#define FORMATS_H
+#ifndef FORMAT_H
+#define FORMAT_H
 
 #include "log2pg.h"
 #include <stddef.h>

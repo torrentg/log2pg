@@ -25,13 +25,24 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include "time.h"
 #include <syslog.h>
 #include <pcre2.h>
 #include <assert.h>
-#include "string.h"
+#include "stringbuf.h"
 #include "witem.h"
 #include "wdata.h"
+#include "utils.h"
 #include "processor.h"
+
+/**************************************************************************//**
+ * @brief Types of database connection status.
+ */
+typedef enum {
+  DISCARD_BUFFER_FULL,      // Buffer full.
+  DISCARD_NO_MATCH_PATTERN, // Values not found.
+  DISCARD_INTER_CHUNK       // Inter-chunk content.
+} discard_cause_e;
 
 /**************************************************************************//**
  * @brief Initialize the processor.
@@ -66,6 +77,59 @@ void processor_reset(processor_t *processor)
 }
 
 /**************************************************************************//**
+ * @brief Discarded content is appended to discard file (if set).
+ * @param[in,out] item Watched item.
+ * @param[in] str Discarded content.
+ * @param[in] len Discarded content length.
+ */
+static void processor_discard(witem_t *item, discard_cause_e cause, const char *ptr, size_t len)
+{
+  syslog(LOG_DEBUG, "processor - discarded content '%.*s'", (int)(len), ptr);
+
+  if (item->discard == NULL) {
+    char *filename = witem_discard_filename(item);
+    if (filename != NULL) {
+      item->discard = fopen(filename, "a");
+      if (item->discard == NULL) {
+        syslog(LOG_WARNING, "error opening file '%s' - %s", filename, strerror(errno));
+      }
+      free(filename);
+    }
+  }
+
+  if (item->discard == NULL) {
+    return;
+  }
+
+  FILE *file = item->discard;
+  const char *cause_str = NULL;
+  time_t timer;
+  char timestamp[26];
+  struct tm* tm_info;
+
+  time(&timer);
+  tm_info = localtime(&timer);
+  strftime(timestamp, 26, "%Y-%m-%d %H:%M:%S", tm_info);
+
+  switch(cause) {
+    case DISCARD_BUFFER_FULL:
+      cause_str = "buffer full";
+      break;
+    case DISCARD_NO_MATCH_PATTERN:
+      cause_str = "pattern values no match";
+      break;
+    case DISCARD_INTER_CHUNK:
+      cause_str = "inter-chunk content";
+      break;
+  }
+
+  //TODO: add line number
+  fprintf(file, "%s - file=%s, cause=%s\n", timestamp, item->filename, cause_str);
+  fwrite(ptr, sizeof(char), len, file);
+  fflush(file);
+}
+
+/**************************************************************************//**
  * @brief Returns the position in str where match ocurres.
  * @see https://www.pcre.org/current/doc/html/pcre2api.html#SEC31
  * @param[in] md Match data.
@@ -90,8 +154,6 @@ static int witem_flush_buffer(witem_t *item)
     return(9);
   }
 
-  syslog(LOG_DEBUG, "processor - discarding content '%s'", item->buffer);
-
   item->buffer_pos = 0;
   item->buffer[0] = '\0';
   return(0);
@@ -104,7 +166,7 @@ static int witem_flush_buffer(witem_t *item)
  */
 static void trace_chunk_values(const char *str, pcre2_match_data *md, const format_t *format)
 {
-  string_t aux = {0};
+  stringbuf_t aux = {0};
   PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);
 
   string_append(&aux, "[");
@@ -133,14 +195,14 @@ static void trace_chunk_values(const char *str, pcre2_match_data *md, const form
  * @brief Process an event.
  * @see https://www.pcre.org/current/doc/html/pcre2api.html#SEC31
  * @see https://www.pcre.org/current/doc/html/pcre2_match.html
- * @param[in] params Monitor parameters.
+ * @param[in] processor Processor parameters.
  * @param[in,out] item Witem to process.
  * @param[in] str String to process (not \0 terminated).
  * @param[in] len Length of the string.
  */
-static void process_chunk(processor_t *params, witem_t *item, const char *str, size_t len)
+static void process_chunk(processor_t *processor, witem_t *item, const char *str, size_t len)
 {
-  assert(params != NULL);
+  assert(processor != NULL);
   assert(item != NULL);
   assert(str != NULL);
   assert(len > 0);
@@ -154,13 +216,13 @@ static void process_chunk(processor_t *params, witem_t *item, const char *str, s
   // regex matching
   rc = pcre2_match(format->re_values, (PCRE2_SPTR)str, (PCRE2_SIZE)len, 0, PCRE2_NOTEMPTY, item->md_values, NULL);
   if (rc < 0) {
-    syslog(LOG_INFO, "processor - chunk discarded (not matched values): '%.*s'", (int)(len), str);
+    processor_discard(item, DISCARD_NO_MATCH_PATTERN, str, len);
     return;
   }
 
   trace_chunk_values(str, item->md_values, format);
   wdata_t *data = wdata_alloc(item, str);
-  mqueue_push(params->mqueue2, MSG_TYPE_MATCH1, data, false, 0);
+  mqueue_push(processor->mqueue2, MSG_TYPE_MATCH1, data, false, 0);
 }
 
 /**************************************************************************//**
@@ -169,12 +231,12 @@ static void process_chunk(processor_t *params, witem_t *item, const char *str, s
  *    only-starts : only declared regex starts.
  *    only-ends : only declared regex ends.
  *    starts-ends : both regex declared.
- * @param[in] params Monitor parameters.
+ * @param[in] processor Processor parameters.
  * @param[in,out] item Witem to process.
  */
-static void process_buffer(processor_t *params, witem_t *item)
+static void process_buffer(processor_t *processor, witem_t *item)
 {
-  assert(params != NULL);
+  assert(processor != NULL);
   assert(item != NULL);
   assert(item->ptr != NULL);
 
@@ -228,12 +290,13 @@ static void process_buffer(processor_t *params, witem_t *item)
       len_chunk = pos2 - pos1;
       str += pos2;
       len -= pos2;
+      //TODO: process discarded content (if any)
     }
 
     // len_chunk=0 happends when only-starts and process_buffer()
     // is called twice because lpm1 is reseted.
     if (len_chunk > 0) {
-      process_chunk(params, item, str_chunk, len_chunk);
+      process_chunk(processor, item, str_chunk, len_chunk);
     }
   }
 
@@ -243,12 +306,12 @@ static void process_buffer(processor_t *params, witem_t *item)
 
 /**************************************************************************//**
  * @brief Read and parses new info appended to file.
- * @param[in] params Monitor parameters.
+ * @param[in] processor Processor parameters.
  * @param[in,out] item Witem to process.
  */
-static void process_witem(processor_t *params, witem_t *item)
+static void process_witem(processor_t *processor, witem_t *item)
 {
-  assert(params != NULL);
+  assert(processor != NULL);
   assert(item != NULL);
   assert(item->type == WITEM_FILE);
 
@@ -260,6 +323,7 @@ static void process_witem(processor_t *params, witem_t *item)
   while(more)
   {
     if (item->buffer_pos >= item->buffer_length-1) {
+      processor_discard(item, DISCARD_BUFFER_FULL, item->buffer, item->buffer_length-1);
       witem_flush_buffer(item);
     }
 
@@ -268,12 +332,13 @@ static void process_witem(processor_t *params, witem_t *item)
     if (len == 0) {
       break;
     }
+    //TODO: if error at fread -> try to reopen ?
 
     more = (len == buffer_free_bytes);
     item->buffer_pos += len;
     item->buffer[item->buffer_pos] = '\0';
 
-    process_buffer(params, item);
+    process_buffer(processor, item);
   }
 }
 
@@ -284,8 +349,8 @@ static void process_witem(processor_t *params, witem_t *item)
  */
 void* processor_run(void *ptr)
 {
-  processor_t *params = (processor_t *) ptr;
-  if (params == NULL || params->mqueue1 == NULL || params->mqueue2 == NULL) {
+  processor_t *processor = (processor_t *) ptr;
+  if (processor == NULL || processor->mqueue1 == NULL || processor->mqueue2 == NULL) {
     assert(false);
     return(NULL);
   }
@@ -294,7 +359,7 @@ void* processor_run(void *ptr)
   while(true)
   {
     // waiting for a new message
-    msg_t msg = mqueue_pop(params->mqueue1, 0);
+    msg_t msg = mqueue_pop(processor->mqueue1, 0);
 
     // processing message
     if (msg.type == MSG_TYPE_ERROR) {
@@ -310,13 +375,14 @@ void* processor_run(void *ptr)
     }
     else {
       assert(msg.data != NULL);
-      process_witem(params, (witem_t *) msg.data);
+      process_witem(processor, (witem_t *) msg.data);
     }
   }
 
   // sends termination signal to database thread
-  mqueue_close(params->mqueue2);
+  mqueue_close(processor->mqueue2);
 
   syslog(LOG_DEBUG, "processor - thread ended");
   return(NULL);
 }
+

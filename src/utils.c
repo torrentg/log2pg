@@ -225,3 +225,81 @@ void* memdup(const void* ptr, size_t size)
 
   return ret;
 }
+
+/**************************************************************************//**
+ * @brief Function to replace a string with another string
+ * @see https://stackoverflow.com/questions/779875/what-is-the-function-to-replace-string-in-c
+ * @param[in] str String containing the substrings to replace.
+ * @param[in] from Substring to search and replace.
+ * @param[in] to Substring to put in place of from (can be NULL = '').
+ * @return Replaced string (you need to free it), NULL if error.
+ */
+char* replace_str(const char *str, const char *from, const char *to)
+{
+  if (str == NULL || from == NULL) {
+    assert(false);
+    return(NULL);
+  }
+  if (to == NULL) {
+    to = "";
+  }
+
+  char *ret;
+  char *ptr;
+  char *tmp;
+  size_t diff;
+  size_t count = 0;
+  size_t len1 = strlen(from);
+  size_t len2 = strlen(to);
+
+  // empty substr causes infinite loop during count
+  if (len1 == 0) {
+    return(NULL);
+  }
+
+  // counting the number of replacements to do
+  count = 0;
+  ptr = (char *) str;
+  for (count=0; (tmp=strstr(ptr, from)); ++count) {
+    ptr = tmp + len1;
+  }
+
+  // allocating space for the new string
+  ret = (char*) malloc(strlen(str) + count*(len2-len1)+1);
+  if (ret == NULL) {
+    return(NULL);
+  }
+
+  // make the replacements
+  ptr = ret;
+  while (count--) {
+   tmp = strstr(str, from);
+   diff = tmp - str;
+   strncpy(ptr, str, diff);
+   ptr += diff;
+   strcpy(ptr, to);
+   ptr += len2;
+   str += diff + len1;
+ }
+ strcpy(ptr, str);
+
+ return(ret);
+}
+
+/**************************************************************************//**
+ * @brief Returns the extension of a filename.
+ * @details Returned pointer points to filename memory.
+ * @param[in] filename Filename ended with '\0'.
+ * @return Pointer to extension (do not free it).
+ */
+const char* filename_ext(const char *filename)
+{
+  const char *ptr = strrchr(filename, '.');
+
+  if (ptr == NULL || ptr == filename) {
+    return NULL;
+  }
+  else {
+    return ptr + 1;
+  }
+}

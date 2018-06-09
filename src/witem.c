@@ -23,11 +23,14 @@
 #include "log2pg.h"
 #include <stdlib.h>
 #include <string.h>
-#include <syslog.h>
+#include <libgen.h>
 #include <errno.h>
+#include <syslog.h>
 #include <assert.h>
 #include "entities.h"
 #include "witem.h"
+#include "stringbuf.h"
+#include "utils.h"
 
 /**************************************************************************//**
  * @brief Frees memory space pointed by ptr.
@@ -50,6 +53,10 @@ void witem_free(void *ptr)
   pcre2_match_data_free(obj->md_ends);
   pcre2_match_data_free(obj->md_values);
   free(obj->param_pos);
+  if (obj->discard != NULL) {
+    fclose(obj->discard);
+  }
+
   free(ptr);
 }
 
@@ -60,10 +67,10 @@ void witem_free(void *ptr)
  */
 static int witem_init(witem_t *item)
 {
-  assert(item != NULL);
-  assert(item->ptr != NULL);
-  assert(item->file == NULL);
-  assert(item->buffer == NULL);
+  if (item == NULL || item->ptr == NULL || item->file != NULL || item->buffer != NULL) {
+    assert(false);
+    return(1);
+  }
 
   if (item->type != WITEM_FILE) {
     return(0);
@@ -149,6 +156,7 @@ witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr)
   ret->filename = strdup(filename);
   ret->type = type;
   ret->ptr = ptr;
+
   ret->file = NULL;
   ret->buffer = NULL;
   ret->buffer_length = 0;
@@ -158,6 +166,7 @@ witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr)
   ret->md_values = NULL;
   ret->num_params = 0;
   ret->param_pos = NULL;
+  ret->discard = NULL;
 
   int rc = witem_init(ret);
   if (rc != 0 || ret->filename == NULL) {
@@ -176,4 +185,66 @@ witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr)
   }
 
   return(ret);
+}
+
+/**************************************************************************//**
+ * @brief Returns the discard filename replacing variables.
+ * @param[in] obj Watched item.
+ * @return The discard filename.
+ */
+char* witem_discard_filename(const witem_t *item)
+{
+  if (item == NULL || item->ptr == NULL || item->type != WITEM_FILE) {
+    assert(false);
+    return(NULL);
+  }
+
+  file_t *file = (file_t *) item->ptr;
+  char *discard = file->discard;
+  char *filename = item->filename;
+
+  if (discard == NULL || filename == NULL) {
+    assert(false);
+    return(NULL);
+  }
+
+  stringbuf_t ret = {0};
+  string_append(&ret, discard);
+
+  if (strstr(ret.data, "$REALPATH") != NULL) {
+    char *value = realpath(filename, NULL);
+    string_replace(&ret, "$REALPATH", value);
+    free(value);
+  }
+
+  if (strstr(ret.data, "$EXTENSION") != NULL) {
+    string_replace(&ret, "$EXTENSION", filename_ext(filename));
+  }
+
+  if (strstr(ret.data, "$FILENAME") != NULL) {
+    char *buf = strdup(filename);
+    char *value = basename(buf);
+    string_replace(&ret, "$FILENAME", value);
+    free(buf);
+  }
+
+  if (strstr(ret.data, "$DIRNAME") != NULL) {
+    char *buf = strdup(filename);
+    char *value = dirname(buf);
+    string_replace(&ret, "$DIRNAME", value);
+    free(buf);
+  }
+
+  if (strstr(ret.data, "$BASENAME") != NULL) {
+    char *buf = strdup(filename);
+    char *value = basename(buf);
+    char *dot = strrchr(value, '.');
+    if (dot != NULL) {
+      *dot = '\0';
+    }
+    string_replace(&ret, "$BASENAME", value);
+    free(buf);
+  }
+
+  return(ret.data);
 }

@@ -67,6 +67,8 @@ typedef struct witem_t
   size_t num_params;
   //! Position in regex_values of table params.
   size_t *param_pos;
+  //! Discard file.
+  FILE *discard;
 } witem_t;
 
 /**************************************************************************
@@ -74,5 +76,6 @@ typedef struct witem_t
  */
 extern witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr);
 extern void witem_free(void *obj);
+extern char* witem_discard_filename(const witem_t *item);
 
 #endif

@@ -20,8 +20,8 @@
 //
 //===========================================================================
 
-#ifndef TABLES_H
-#define TABLES_H
+#ifndef TABLE_H
+#define TABLE_H
 
 #include <libconfig.h>
 #include "vector.h"

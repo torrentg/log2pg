@@ -35,6 +35,8 @@ extern int replace_char(char *str, char old, char new);
 extern double difftimeval(const struct timeval *tv1, const struct timeval *tv2);
 extern size_t elapsed_millis(const struct timeval *tv);
 extern void* memdup(const void* ptr, size_t size);
+extern char* replace_str(const char *str, const char *from, const char *to);
+extern const char *filename_ext(const char *filename);
 
 #endif
 

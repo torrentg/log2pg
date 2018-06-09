@@ -20,8 +20,8 @@
 //
 //===========================================================================
 
-#ifndef CQUEUE_H
-#define CQUEUE_H
+#ifndef MQUEUE_H
+#define MQUEUE_H
 
 #include <stdbool.h>
 #include <pthread.h>

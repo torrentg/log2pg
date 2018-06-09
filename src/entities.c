@@ -35,11 +35,13 @@
 #define FILE_PARAM_PATH "path"
 #define FILE_PARAM_FORMAT "format"
 #define FILE_PARAM_TABLE "table"
+#define FILE_PARAM_DISCARD "discard"
 
 static const char *FILE_PARAMS[] = {
     FILE_PARAM_PATH,
     FILE_PARAM_FORMAT,
     FILE_PARAM_TABLE,
+    FILE_PARAM_DISCARD,
     NULL
 };
 
@@ -48,9 +50,10 @@ static const char *FILE_PARAMS[] = {
  * @param[in] name File name.
  * @param[in] format Pointer to format.
  * @param[in] table Pointer to table.
+ * @param[in] discard Discard filename (can be NULL).
  * @return Initialized object or NULL if error.
  */
-static file_t* wfile_alloc(const char *pattern, format_t *format, table_t *table)
+static file_t* wfile_alloc(const char *pattern, format_t *format, table_t *table, const char *discard)
 {
   assert(pattern != NULL);
   assert(format != NULL);
@@ -61,12 +64,17 @@ static file_t* wfile_alloc(const char *pattern, format_t *format, table_t *table
     return(NULL);
   }
 
-  syslog(LOG_DEBUG, "created wfile [address=%p, pattern=%s, format=%s, table=%s]",
-         (void *)ret, pattern, format->name, table->name);
+  syslog(LOG_DEBUG, "created wfile [address=%p, pattern=%s, format=%s, table=%s, discard=%s]",
+         (void *)ret, pattern, format->name, table->name, discard);
 
   ret->pattern = strdup(pattern);
   ret->format = format;
   ret->table = table;
+  ret->discard = NULL;
+
+  if (discard != NULL) {
+    ret->discard = strdup(discard);
+  }
 
   return(ret);
 }
@@ -80,10 +88,11 @@ static void wfile_free(void *ptr)
   if (ptr == NULL) return;
   file_t *obj = (file_t *) ptr;
 
-  syslog(LOG_DEBUG, "removed wfile [address=%p, pattern=%s, format=%s, table=%s]",
-         ptr, obj->pattern, obj->format->name, obj->table->name);
+  syslog(LOG_DEBUG, "removed wfile [address=%p, pattern=%s, format=%s, table=%s, discard=%s]",
+         ptr, obj->pattern, obj->format->name, obj->table->name, obj->discard);
 
   free(obj->pattern);
+  free(obj->discard);
   free(ptr);
 }
 
@@ -134,9 +143,11 @@ void dir_free(void *ptr)
  * @param[in] pattern File name (possibly a pattern).
  * @param[in] format Pointer to format.
  * @param[in] table Pointer to table.
+ * @param[in] discard Discard filename (can be NULL).
  * @return 0=OK, otherwise = an error ocurred.
  */
-static int dirs_add(vector_t *lst, const char *path, const char *pattern, format_t *format, table_t *table)
+static int dirs_add(vector_t *lst, const char *path, const char *pattern, format_t *format,
+                    table_t *table, const char *discard)
 {
   assert(lst != NULL);
   assert(path != NULL);
@@ -172,7 +183,7 @@ static int dirs_add(vector_t *lst, const char *path, const char *pattern, format
   // Adding the file pattern to directory. Every file creation
   // will be matched with the list of file patterns to determine
   // if the new file need to be watched.
-  file_t *file = wfile_alloc(pattern, format, table);
+  file_t *file = wfile_alloc(pattern, format, table, discard);
   vector_insert(&(dir->files), file);
 
 dirs_add_exit:
@@ -238,34 +249,37 @@ static int dirs_parse(vector_t *lst, config_setting_t *setting, vector_t *format
   const char *path = NULL;
   const char *format = NULL;
   const char *table = NULL;
+  const char *discard = NULL;
 
   // check attributes
   rc = setting_check_childs(setting, FILE_PARAMS);
 
   // reading attributes
   config_setting_lookup_string(setting, "path", &path);
-  config_setting_lookup_string(setting, "format", &format);
-  config_setting_lookup_string(setting, "table", &table);
-
-  // checking if attributes are set
   if (path == NULL) {
     syslog(LOG_ERR, "file without path at %s:%d.",
            config_setting_source_file(setting),
            config_setting_source_line(setting));
     rc = 1;
   }
+
+  config_setting_lookup_string(setting, "format", &format);
   if (format == NULL) {
     syslog(LOG_ERR, "file without format at %s:%d.",
            config_setting_source_file(setting),
            config_setting_source_line(setting));
     rc = 1;
   }
+
+  config_setting_lookup_string(setting, "table", &table);
   if (table == NULL) {
     syslog(LOG_ERR, "file without table at %s:%d.",
            config_setting_source_file(setting),
            config_setting_source_line(setting));
     rc = 1;
   }
+
+  config_setting_lookup_string(setting, "discard", &discard);
 
   if (rc != 0) {
     goto files_parse_item_exit;
@@ -331,7 +345,7 @@ static int dirs_parse(vector_t *lst, config_setting_t *setting, vector_t *format
 
   // adding directories and files
   for(int i=0; globbuf.gl_pathv[i]!=NULL; i++) {
-    dirs_add(lst, globbuf.gl_pathv[i], filepattern, oformat, otable);
+    dirs_add(lst, globbuf.gl_pathv[i], filepattern, oformat, otable, discard);
   }
 
 files_parse_item_exit:

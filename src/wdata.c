@@ -28,7 +28,7 @@
 #include <errno.h>
 #include <assert.h>
 #include "entities.h"
-#include "string.h"
+#include "stringbuf.h"
 #include "wdata.h"
 
 /**************************************************************************//**
@@ -53,7 +53,7 @@ void wdata_free(void *ptr)
  */
 static char* wdata_values_str(witem_t *item, const char *str)
 {
-  string_t ret = {0};
+  stringbuf_t ret = {0};
   table_t *table = ((file_t *) item->ptr)->table;
   PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(item->md_values);
 

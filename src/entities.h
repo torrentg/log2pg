@@ -40,6 +40,8 @@ typedef struct file_t
   format_t *format;
   //! Pointer to table (not owner)
   table_t *table;
+  //! Discard file pattern.
+  char *discard;
 } file_t;
 
 /**************************************************************************//**
