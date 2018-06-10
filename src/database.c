@@ -125,11 +125,11 @@ static bool database_prepare_stmt(database_t *database, table_t *table)
   if (res == NULL || PQresultStatus(res) != PGRES_COMMAND_OK) {
     char *msg = PQerrorMessage(database->conn);
     replace_char(msg, '\n', '\0');
-    syslog(LOG_ERR, "database - error preparing statement '%s' - %s", table->name, msg);
+    syslog(LOG_ERR, "database - error preparing statement '%s'=[%s] - %s", table->name, query, msg);
     done = false;
   }
   else {
-    syslog(LOG_DEBUG, "database - prepared statement '%s' created: %s", table->name, query);
+    syslog(LOG_DEBUG, "database - prepared statement created '%s'=[%s]", table->name, query);
   }
 
   free(query);

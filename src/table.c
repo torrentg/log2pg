@@ -35,7 +35,7 @@
 #define TABLE_PARAM_SQL "sql"
 
 #define MAX_NUM_PARAMS 99
-#define PARAMETER_PREFIX ':'
+#define PARAMETER_PREFIX '$'
 #define PARAMETER_MAX_SIZE 32
 
 static const char *TABLE_PARAMS[] = {
@@ -150,9 +150,9 @@ char* table_get_stmt(const table_t *table)
   char param_id[6] = {0};
 
   stringbuf_append(&ret, table->sql);
-  param_name[0] = ':';
+  param_name[0] = PARAMETER_PREFIX;
 
-  // performs the replacement (:variable -> $1)
+  // performs the replacement ($variable -> $1)
   for(size_t i=0; i<table->parameters.size; i++) {
     sprintf(param_id, "$%zu", i+1);
     strncpy(param_name+1, (char*)(table->parameters.data[i]), PARAMETER_MAX_SIZE);

@@ -29,19 +29,47 @@ At this moment you can use the newly created executable.
 
 ## Configuration File
 
-You can found a fully detailled configuration file in [`conf/log2pg.conf`](conf/log2pg.conf). A basic configuration file showing the capabilities of log2pg:
+You can find a fully detailed configuration file in [`conf/log2pg.conf`](conf/log2pg.conf). 
+
+We pay special attention to `starts` and `ends` parameters because they determine the identification of chunks (pieces of text containing a database row info).
+
+* __Case only `ends`__. All file content is processed. The chunk separator is indicated by `ends`.
+    * Example: Syslog files. These files contain one trace per line, in this case `ends="\\n"` suffices to identify chunks.
+* __Case only `starts`__. All file content is processed. The chunk separator is indicated by `starts`. 
+    * Example: Java log files. These files can contain stacktraces. This prevents the use of `ends`. In contrast, all java traces starts with a regular pattern (eg. a timestamp at the begining of the line similar to `2018-06-10 12:52:39`). In this case `starts="^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9][2}:[0-9][2}:[0-9][2} "` identifies chunks.
+* __Case `ends` and `starts`__. Only file content starting by `starts` and ending with `ends` is processed.
+    * Example: A java properties file. These files contains a list of key-value items. Multi-line values are allowed using backslash + end-of-line. Comments and blank lines are not taken into account. In this case, properties can be identified using `starts="^[[:alpha:]]"` and `ends="[^\\\\]\\n"` (end-of-line not preceded by a backslash).
+
+### Example: Apache log file
+
+We want to insert apache `access_log` file into postgres database table [`t_http_access`](conf/log2pg.sql). Apache combined-type log traces look like this:
+
+```
+192.168.1.2 - - [10/Jun/2018:08:43:44 +0200] "GET /dependencies.html HTTP/1.1" 200 20174 "http://www.ccruncher.net/gstarted.html" "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/60.0"
+192.168.1.2 - - [10/Jun/2018:08:44:01 +0200] "GET /ifileref.html HTTP/1.1" 200 57071 "http://www.ccruncher.net/dependencies.html" "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/60.0"
+192.168.1.2 - - [10/Jun/2018:08:44:09 +0200] "GET /features.html HTTP/1.1" 200 8299 "http://www.ccruncher.net/ifileref.html" "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/60.0"
+122.169.98.209 - - [10/Jun/2018:08:56:21 +0200] "GET / HTTP/1.0" 200 50 "-" "-"
+176.62.87.189 - - [10/Jun/2018:09:15:08 +0200] "GET / HTTP/1.0" 200 50 "-" "-"
+```
+
+Check that your `httpd.conf` contains the following lines:
+
+```
+LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
+CustomLog "logs/access_log" combined
+```
+
+A basic configuration file showing the capabilities of log2pg:
 
 ```yaml
-# syslog configuration
 syslog = {
   facility = "local7";
   level = "info";
   tag = "log2pg";
 };
 
-# database configuration
 database = {
-  connection-url = "postgresql://pglogd:pglogd@localhost:5432/pglogd";
+  connection-url = "postgresql://log2pg:log2pg@localhost:5432/log2pg";
   retry-interval = 10000; // 10 seconds
   max-failed-reconnections = 3;
   transaction = {
@@ -51,17 +79,15 @@ database = {
   };
 };
 
-# files to monitor
 files = (
   {
-    path = "/var/log/httpd/*access_log";
+    path = "/var/log/httpd/access_log";
     format = "httpd_access";
     table = "httpd";
-    discard = "$BASENAME.l2p";
+    discard = "access_log.l2p";
   }
 );
 
-# format of files
 formats = (
   {
     name = "httpd_access";
@@ -76,14 +102,12 @@ formats = (
   }
 );
 
-# database tables
 tables = (
   {
-    name = "httpd";
-    sql = "insert into log_entries(request_time, seconds_to_serve, response_code, bytes_sent, request_type, "
-          "virtual_domain, remote_host, request_url_path, referer, user_agent, request, logname, username) "
-          "values(:request_time, :seconds_to_serve, :response_code, :bytes_sent, :request_type, "
-          ":virtual_domain, :remote_host, :request_url_path, :referer, :user_agent, :request, :logname, :username)";
+    name = "httpd_access";
+    sql = "insert into t_httpd_access(hostname, identd, userid, rtime, request, status, bytes, referer, useragent) "
+          "values($hostname, $identd, $userid, to_timestamp($rtime, 'DD/Mon/YYYY:HH24:MI:SS'), $request, "
+          "NULLIF($status, '-')::integer, NULLIF($bytes, '-')::integer, $referer, $useragent)";
   }
 );
 ```

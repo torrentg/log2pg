@@ -163,6 +163,9 @@ static int monitor_add_dir_pattern(monitor_t *monitor, dir_t *dir, file_t *file)
         witem_t *item = witem_alloc(realfilename, WITEM_FILE, file);
         num_watches += monitor_add_watch(monitor, item, true);
       }
+      else {
+        syslog(LOG_WARNING, "monitor - cannot access file %s", realfilename);
+      }
     }
   }
 
@@ -184,6 +187,7 @@ static int monitor_add_dir(monitor_t *monitor, dir_t *dir)
   assert(dir != NULL);
 
   if (!is_readable_dir(dir->path)) {
+    syslog(LOG_WARNING, "monitor - cannot access directory %s", dir->path);
     return(0);
   }
 
