@@ -112,6 +112,12 @@ tables = (
 );
 ```
 
+## Technical Description
+
+Log2pg is coded in C following a class-like coding style (struct + functions). The main components and their relationships are shown below.
+
+![schema](doc/tech-v0.1.png)
+
 ## <a name="built-with"></a>Built With
 
 Log2pg relies on the following projects:
