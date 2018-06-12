@@ -112,6 +112,7 @@ void help(void)
     "File forwarder to Postgresql database.\n"
     "\n"
     "Mandatory arguments to long options are mandatory for short options too.\n"
+    "  -d, --daemon        Run as daemon (detach from terminal).\n"
     "  -f, --file=CONFIG   Set configuration file (default = " DEFAULT_CONFIG_FILE ").\n"
     "  -h, --help          Show this message and exit.\n"
     "      --version       Show version info and exit.\n"
@@ -145,7 +146,7 @@ void version(void)
  * @param[in] filename Configuration filename.
  * @return 0=OK, otherwise=KO.
  */
-int run(const char *filename)
+int run(const char *filename, bool daemonize)
 {
   char *syslog_tag = NULL;
   config_t cfg = {0};
@@ -209,6 +210,11 @@ int run(const char *filename)
     goto run_exit;
   }
 
+  // detach from terminal
+  if (daemonize) {
+    daemon(1, 0);
+  }
+
   // catching interruptions like ctrl-C
   set_signal_handlers();
 
@@ -264,14 +270,17 @@ int main(int argc, char *argv[])
   // config filename
   char *filename = NULL;
   // short options
-  char* const options1 = "hf:" ;
+  char* const options1 = "dhf:" ;
   // long options (name + has_arg + flag + val)
   const struct option options2[] = {
+      { "daemon",       0,  NULL,  'd' },
       { "file",         1,  NULL,  'f' },
       { "help",         0,  NULL,  'h' },
       { "version",      0,  NULL,  301 },
       { NULL,           0,  NULL,   0  }
   };
+  // act as a daemon
+  bool daemonize = false;
 
   // parsing options
   while (1)
@@ -283,6 +292,10 @@ int main(int argc, char *argv[])
 
     switch(curropt)
     {
+      case 'd': // -d or --daemon
+        daemonize = true;
+        break;
+
       case 'f': // -f FILE or --file=FILE (set config file)
         if (filename != NULL) {
           fprintf(stderr, "Error: configuration file defined twice.\n");
@@ -327,7 +340,7 @@ int main(int argc, char *argv[])
   }
 
   // running simulation
-  rc = run(filename);
+  rc = run(filename, daemonize);
 
 main_exit:
   free(filename);
