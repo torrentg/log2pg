@@ -148,7 +148,7 @@ void version(void)
  */
 int run(const char *filename, bool daemonize)
 {
-  char *syslog_tag = NULL;
+  log_t log = {0};
   config_t cfg = {0};
   vector_t formats = {0};
   vector_t tables = {0};
@@ -169,7 +169,7 @@ int run(const char *filename, bool daemonize)
   }
 
   // init log
-  init_syslog(&syslog_tag, &cfg);
+  log_init(&log, &cfg);
   syslog(LOG_INFO, "log2pg started");
 
   // initialize message queue between monitor-processor
@@ -253,7 +253,7 @@ run_exit:
   vector_reset(&formats, format_free);
   vector_reset(&tables, table_free);
   syslog(LOG_INFO, "log2pg ended (rc=%d)", rc);
-  free(syslog_tag);
+  log_reset(&log);
   return(rc);
 }
 

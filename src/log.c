@@ -65,8 +65,12 @@ static int get_code_value(CODE *code, const char *name)
  * @param[out] syslog_tag Syslog tag name (to be free by caller).
  * @param[in] cfg Configuration.
  */
-void init_syslog(char **syslog_tag, const config_t *cfg)
+void log_init(log_t *log, const config_t *cfg)
 {
+  log->facility = LOG_LOCAL7;
+  log->level = LOG_INFO;
+  log->tag = NULL;
+
   const char *facility = DEFAULT_SYSLOG_FACILITY;
   const char *level = DEFAULT_SYSLOG_LEVEL;
   const char *tag = DEFAULT_SYSLOG_TAG;
@@ -81,16 +85,16 @@ void init_syslog(char **syslog_tag, const config_t *cfg)
     config_setting_lookup_string(parent, LOG_PARAM_TAG, &tag);
   }
 
-  int ifacility = get_code_value(facilitynames, facility);
-  if (ifacility < 0) {
+  log->facility = get_code_value(facilitynames, facility);
+  if (log->facility < 0) {
     fprintf(stderr, "Warning: invalid syslog.facility value in config file.\n");
-    ifacility = LOG_LOCAL7;
+    log->facility = LOG_LOCAL7;
   }
 
-  int ilevel = get_code_value(prioritynames, level);
-  if (ilevel < 0) {
+  log->level = get_code_value(prioritynames, level);
+  if (log->level < 0) {
     fprintf(stderr, "Warning: invalid syslog.level value in config file.\n");
-    ilevel = LOG_INFO;
+    log->level = LOG_INFO;
   }
 
   if (strlen(tag) == 0) {
@@ -98,9 +102,23 @@ void init_syslog(char **syslog_tag, const config_t *cfg)
     tag = DEFAULT_SYSLOG_TAG;
   }
 
-  *syslog_tag = strdup(tag);
-  setlogmask(LOG_UPTO(ilevel));
-  openlog(*syslog_tag, LOG_PERROR|LOG_CONS|LOG_NDELAY, ifacility);
+  log->tag = strdup(tag);
+  setlogmask(LOG_UPTO(log->level));
+  openlog(log->tag, LOG_PERROR|LOG_CONS|LOG_NDELAY, log->facility);
   syslog(LOG_DEBUG, "syslog enabled [facility=%s, level=%s, tag=%s]", facility, level, tag);
 }
 
+/**************************************************************************//**
+ * @brief Reset a log object.
+ * @param[in,out] log Log object.
+ */
+void log_reset(log_t *log)
+{
+  if (log == NULL) {
+    assert(0);
+    return;
+  }
+
+  free(log->tag);
+  log->tag = NULL;
+}

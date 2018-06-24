@@ -54,7 +54,7 @@ typedef struct database_t
   char *conn_str;
   //! Connection lost retry interval (in millis).
   size_t retryinterval;
-  //! MAximum number of failed reconnections.
+  //! Maximum number of failed reconnections.
   size_t maxfailsrecon;
   //! Maximum number of inserts per transaction.
   size_t ts_maxinserts;

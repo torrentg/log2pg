@@ -24,8 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syslog.h>
 #include <ctype.h>
+#include <syslog.h>
 #include <assert.h>
 #include "config.h"
 #include "table.h"
@@ -153,8 +153,8 @@ char* table_get_stmt(const table_t *table)
   param_name[0] = PARAMETER_PREFIX;
 
   // performs the replacement ($variable -> $1)
-  for(size_t i=0; i<table->parameters.size; i++) {
-    sprintf(param_id, "$%zu", i+1);
+  for(uint32_t i=0; i<table->parameters.size; i++) {
+    sprintf(param_id, "$%d", (int)(i+1));
     strncpy(param_name+1, (char*)(table->parameters.data[i]), PARAMETER_MAX_SIZE);
     stringbuf_replace(&ret, param_name, param_id);
   }

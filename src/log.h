@@ -25,7 +25,25 @@
 
 #include <libconfig.h>
 
-extern void init_syslog(char **syslog_tag, const config_t *cfg);
+/**************************************************************************//**
+ * @brief Log struct.
+ */
+typedef struct log_t
+{
+    //! Syslog tag.
+    char *tag;
+  //! Syslog facility.
+  int facility;
+  //! Syslog level.
+  int level;
+
+} log_t;
+
+/**************************************************************************
+ * Function declarations.
+ */
+extern void log_init(log_t *log, const config_t *cfg);
+extern void log_reset(log_t *log);
 
 #endif
 

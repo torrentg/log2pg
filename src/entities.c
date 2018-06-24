@@ -205,9 +205,9 @@ static int dirs_check_parameters(config_setting_t *setting, format_t *format, ta
 
   int rc = 0;
 
-  for(size_t j=0; j<table->parameters.size; j++) {
+  for(uint32_t j=0; j<table->parameters.size; j++) {
     bool found = false;
-    for(size_t i=0; i<format->parameters.size; i++) {
+    for(uint32_t i=0; i<format->parameters.size; i++) {
       if (strcmp(format->parameters.data[i], table->parameters.data[j]) == 0) {
         found = true;
         break;
@@ -404,7 +404,7 @@ int dir_file_match(dir_t *dir, const char *name)
     return(-1);
   }
 
-  for(size_t i=0; i<dir->files.size; i++) {
+  for(uint32_t i=0; i<dir->files.size; i++) {
     file_t *file = (file_t *) dir->files.data[i];
     assert(file != NULL);
     assert(file->pattern != NULL);

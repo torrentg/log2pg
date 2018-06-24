@@ -41,7 +41,7 @@ void vector_reset(vector_t *vector, void (*item_free)(void*))
 {
   if (vector == NULL) return;
   if (vector->data != NULL && item_free != NULL) {
-    for(size_t i=0; i<vector->size; i++) {
+    for(uint32_t i=0; i<vector->size; i++) {
       if (vector->data[i] != NULL) {
         item_free(vector->data[i]);
       }
@@ -67,7 +67,7 @@ int vector_find(const vector_t *vector, const char *value)
     return -1;
   }
 
-  for(size_t i=0; i<vector->size; i++) {
+  for(uint32_t i=0; i<vector->size; i++) {
     if (vector->data[i] == NULL) continue;
     char **str = (char **) vector->data[i];
     if ((*str == NULL && value == NULL) ||
@@ -92,7 +92,7 @@ bool vector_contains(const vector_t *vector, const void *obj)
     return false;
   }
 
-  for(size_t i=0; i<vector->size; i++) {
+  for(uint32_t i=0; i<vector->size; i++) {
     if (vector->data[i] == obj) return(true);
   }
 
@@ -105,14 +105,14 @@ bool vector_contains(const vector_t *vector, const void *obj)
  * @param[in] new_size The new list capacity.
  * @return 0=OK, 1=KO.
  */
-static int vector_resize(vector_t *vector, size_t new_capacity)
+static int vector_resize(vector_t *vector, uint32_t new_capacity)
 {
   void **tmp = (void**) realloc(vector->data, (new_capacity)*sizeof(void*));
   if (tmp == NULL) {
     return(1);
   }
 
-  for(size_t i=vector->size; i<new_capacity; i++) {
+  for(uint32_t i=vector->size; i<new_capacity; i++) {
     tmp[i] = NULL;
   }
   vector->data = tmp;
@@ -142,7 +142,13 @@ int vector_insert(vector_t *vector, void *obj)
     rc = vector_resize(vector, INITIAL_CAPACITY);
   }
   else if (vector->size == vector->capacity) {
-    rc = vector_resize(vector, RESIZE_FACTOR*vector->capacity);
+    size_t new_capacity = RESIZE_FACTOR*(size_t)(vector->capacity);
+    if (new_capacity > UINT32_MAX) {
+      rc = 1;
+    }
+    else {
+      rc = vector_resize(vector, new_capacity);
+    }
   }
 
   if (rc == 0) {
@@ -198,7 +204,7 @@ int vector_clear(vector_t *vector, void (*item_free)(void *))
     return(0);
   }
 
-  for(size_t i=0; i<vector->size; i++) {
+  for(uint32_t i=0; i<vector->size; i++) {
     if (vector->data[i] != NULL && item_free != NULL) {
       item_free(vector->data[i]);
     }
@@ -216,7 +222,7 @@ int vector_clear(vector_t *vector, void (*item_free)(void *))
  * @param[in] capacity Minimum capacity for the vector.
  * @return 0=OK, 1=KO.
  */
-int vector_reserve(vector_t *vector, size_t capacity)
+int vector_reserve(vector_t *vector, uint32_t capacity)
 {
   if (vector == NULL) {
     assert(false);
@@ -245,8 +251,8 @@ char* vector_print(const vector_t *vector)
     return(NULL);
   }
 
-  size_t len = 2; // initial '[' + ending  ']'
-  for (size_t i=0; i<vector->size; i++) {
+  int len = 2; // initial '[' + ending  ']'
+  for (uint32_t i=0; i<vector->size; i++) {
     len += strlen((char*)(vector->data[i])) + 2; // ', ' takes 2 places
   }
 
@@ -257,7 +263,7 @@ char* vector_print(const vector_t *vector)
 
   char *ptr = ret+1;
   sprintf(ret, "[");
-  for (size_t i=0; i<vector->size; i++) {
+  for (uint32_t i=0; i<vector->size; i++) {
     sprintf(ptr, "%s", (char*)(vector->data[i]));
     ptr += strlen((char*)(vector->data[i]));
     if (i+1<vector->size) {

@@ -199,7 +199,7 @@ static int monitor_add_dir(monitor_t *monitor, dir_t *dir)
 
   // adding files matching patterns
   if (num_watches > 0) {
-    for(size_t i=0; i<dir->files.size; i++) {
+    for(uint32_t i=0; i<dir->files.size; i++) {
       file_t *file = (file_t *) dir->files.data[i];
       num_watches += monitor_add_dir_pattern(monitor, dir, file);
     }
@@ -220,7 +220,7 @@ static int monitor_add_dirs(monitor_t *monitor, const vector_t *dirs)
 
   int num_watches = 0;
 
-  for(size_t i=0; i<dirs->size; i++) {
+  for(uint32_t i=0; i<dirs->size; i++) {
     dir_t *dir = (dir_t *) dirs->data[i];
     num_watches += monitor_add_dir(monitor, dir);
   }

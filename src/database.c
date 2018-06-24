@@ -150,7 +150,7 @@ static bool database_create_stmts(database_t *database)
   bool done = true;
 
   // create prepared statements
-  for(size_t i=0; i<database->tables->size; i++) {
+  for(uint32_t i=0; i<database->tables->size; i++) {
     table_t *table = (table_t*)(database->tables->data[i]);
     done &= database_prepare_stmt(database, table);
   }
@@ -430,7 +430,7 @@ static bool database_process_pending(database_t *database)
   vector_reserve(&aux, database->ts_maxinserts);
   vector_swap(&aux, &(database->pending));
 
-  for(size_t i=0; i<aux.size; i++) {
+  for(uint32_t i=0; i<aux.size; i++) {
     wdata_t *data = (wdata_t *) aux.data[i];
     done = database_exec(database, data);
     if (!done) {

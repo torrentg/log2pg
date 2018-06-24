@@ -23,6 +23,7 @@
 #ifndef VECTOR_H
 #define VECTOR_H
 
+#include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
@@ -34,9 +35,9 @@ typedef struct vector_t
   //! Pointers to objects where first member is a string.
   void **data;
   //! List size.
-  size_t size;
+  uint32_t size;
   //! List capacity
-  size_t capacity;
+  uint32_t capacity;
 } vector_t;
 
 /**************************************************************************
@@ -49,7 +50,7 @@ extern int vector_remove(vector_t *vector, int pos, void (*item_free)(void *));
 extern int vector_clear(vector_t *vector, void (*item_free)(void *));
 extern void vector_reset(vector_t *vector, void (*item_free)(void*));
 extern char* vector_print(const vector_t *vector);
-extern int vector_reserve(vector_t *vector, size_t capacity);
+extern int vector_reserve(vector_t *vector, uint32_t capacity);
 extern vector_t vector_clone(const vector_t *vector);
 extern void vector_swap(vector_t *vector1, vector_t *vector2);
 
