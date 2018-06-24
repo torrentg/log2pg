@@ -1,0 +1,18 @@
+[Unit]
+Description=Httpd logging to Postgresql database
+After=network.target
+After=postgresql.service
+Before=httpd.service
+Requires=postgresql.service
+
+[Service]
+Type=forking
+User=root
+Group=root
+ExecStart=/opt/log2pg/log2pg -df /opt/log2pg/log2pg.conf
+ExecStop=
+KillMode=process
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
