@@ -171,7 +171,7 @@ static void trace_chunk_values(const char *str, pcre2_match_data *md, const form
 
   stringbuf_append(&aux, "[");
 
-  for(size_t i=0; i<format->parameters.size; i++)
+  for(uint32_t i=0; i<format->parameters.size; i++)
   {
     if (aux.length > 1) {
       stringbuf_append(&aux, ", ");

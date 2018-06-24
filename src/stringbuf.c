@@ -36,7 +36,7 @@
  * @param[in] new_capacity The new string capacity.
  * @return true=OK, false=KO.
  */
-static bool stringbuf_resize(stringbuf_t *obj, size_t new_capacity)
+static bool stringbuf_resize(stringbuf_t *obj, uint32_t new_capacity)
 {
   assert(obj != NULL);
   assert(obj->capacity < new_capacity);
@@ -59,7 +59,7 @@ static bool stringbuf_resize(stringbuf_t *obj, size_t new_capacity)
  * @param len Content length
  * @return 0=OK, 1=KO.
  */
-int stringbuf_append_n(stringbuf_t *obj, const char *str, size_t len)
+int stringbuf_append_n(stringbuf_t *obj, const char *str, uint32_t len)
 {
   assert(obj != NULL);
   assert(obj->data != NULL || obj->capacity == 0);
@@ -71,7 +71,10 @@ int stringbuf_append_n(stringbuf_t *obj, const char *str, size_t len)
   }
 
   if (obj->capacity < obj->length + len + 1) {
-    size_t new_capacity = MAX(RESIZE_FACTOR*obj->capacity, obj->length+len+1);
+    size_t new_capacity = MAX(RESIZE_FACTOR*(size_t)(obj->capacity), (size_t)(obj->length)+len+1);
+    if (new_capacity > UINT32_MAX) {
+      return(1);
+    }
     if (!stringbuf_resize(obj, new_capacity)) {
       return(1);
     }
@@ -151,8 +154,11 @@ int stringbuf_replace(stringbuf_t *obj, const char *from, const char *to)
   // memory management to ensure capacity
   size_t required_len = obj->length + count*(len2-len1);
   if (required_len+1 > obj->capacity) {
-    size_t new_capacity = MAX(RESIZE_FACTOR*obj->capacity, required_len+1);
-    if(!stringbuf_resize(obj, new_capacity)) {
+    size_t new_capacity = MAX(RESIZE_FACTOR*(size_t)(obj->capacity), required_len+1);
+    if (new_capacity > UINT32_MAX) {
+      return(-1);
+    }
+    if (!stringbuf_resize(obj, new_capacity)) {
       return(-1);
     }
   }

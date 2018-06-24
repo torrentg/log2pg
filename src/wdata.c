@@ -61,7 +61,7 @@ static char* wdata_values_str(witem_t *item, const char *str)
 
   stringbuf_append(&ret, "[");
 
-  for(size_t i=0; i<table->parameters.size; i++)
+  for(uint32_t i=0; i<table->parameters.size; i++)
   {
     if (ret.length > 1) {
       stringbuf_append(&ret, ", ");

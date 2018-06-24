@@ -23,7 +23,7 @@
 #ifndef STRINGBUF_H
 #define STRINGBUF_H
 
-#include <stddef.h>
+#include <stdint.h>
 
 /**************************************************************************//**
  * @brief Basic string object.
@@ -34,16 +34,16 @@ typedef struct stringbuf_t
   //! String content ('\0' ended).
   char *data;
   //! String length.
-  size_t length;
+  uint32_t length;
   //! String capacity.
-  size_t capacity;
+  uint32_t capacity;
 } stringbuf_t;
 
 /**************************************************************************
  * Function declarations.
  */
 extern int stringbuf_append(stringbuf_t *obj, const char *str);
-extern int stringbuf_append_n(stringbuf_t *obj, const char *str, size_t len);
+extern int stringbuf_append_n(stringbuf_t *obj, const char *str, uint32_t len);
 extern void stringbuf_reset(stringbuf_t *obj);
 int stringbuf_replace(stringbuf_t *obj, const char *from, const char *to);
 
