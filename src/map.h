@@ -23,7 +23,7 @@
 #ifndef MAP_H
 #define MAP_H
 
-#include <stddef.h>
+#include <stdint.h>
 
 /**************************************************************************//**
  * @brief Map bucket with positive int key.
@@ -45,9 +45,9 @@ typedef struct map_t
   //! Map buckets.
   map_bucket_t *data;
   //! Number of buckets.
-  size_t capacity;
+  uint32_t capacity;
   //! Number of entries.
-  size_t size;
+  uint32_t size;
 } map_t;
 
 /**************************************************************************//**
@@ -57,9 +57,9 @@ typedef struct map_t
 typedef struct map_iterator_t
 {
   //! Last visited index.
-  size_t pos;
+  uint32_t pos;
   //! Number of visited elements (0 = fresh iterator).
-  size_t num;
+  uint32_t num;
 } map_iterator_t;
 
 /**************************************************************************

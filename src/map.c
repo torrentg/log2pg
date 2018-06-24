@@ -37,7 +37,7 @@
  * @param[in] new_capacity The new map capacity.
  * @return 0=OK, 1=KO.
  */
-static int map_resize(map_t *map, size_t new_capacity)
+static int map_resize(map_t *map, uint32_t new_capacity)
 {
   if (map->size > map->capacity || new_capacity <= map->capacity) {
     assert(false);
@@ -49,12 +49,12 @@ static int map_resize(map_t *map, size_t new_capacity)
     return(1);
   }
 
-  for(size_t i=0; i<new_capacity; i++) {
+  for(uint32_t i=0; i<new_capacity; i++) {
     new_buckets[i].key = -1;
     new_buckets[i].value = NULL;
   }
 
-  size_t old_capacity = map->capacity;
+  uint32_t old_capacity = map->capacity;
   map_bucket_t *old_buckets = map->data;
 
   map->data = new_buckets;
@@ -66,7 +66,7 @@ static int map_resize(map_t *map, size_t new_capacity)
   }
 
   int rc = 0;
-  for(size_t i=0; i<old_capacity; i++) {
+  for(uint32_t i=0; i<old_capacity; i++) {
     if (old_buckets[i].key >= 0) {
       rc |= map_insert(map, old_buckets[i].key, old_buckets[i].value);
     }
@@ -91,7 +91,7 @@ void map_reset(map_t *map, void (*item_free)(void*))
   assert(map->size <= map->capacity);
 
   if (item_free != NULL && map->data != NULL) {
-    for(size_t i=0; i<map->capacity; i++) {
+    for(uint32_t i=0; i<map->capacity; i++) {
       if (map->data[i].key >= 0) {
         item_free(map->data[i].value);
         assert(map->size > 0);
@@ -238,7 +238,7 @@ int map_remove(map_t *map, int key, void (*item_free)(void*))
   }
 
   int k = 0;
-  size_t num = 0;
+  uint32_t num = 0;
   int ipos1 = ipos0;
   while(num < map->capacity)
   {
@@ -279,7 +279,7 @@ map_bucket_t* map_next(const map_t *map, map_iterator_t *it)
     return(NULL);
   }
 
-  for(size_t i=it->pos+(it->num==0?0:1); i<map->capacity; i++) {
+  for(uint32_t i=it->pos+(it->num==0?0:1); i<map->capacity; i++) {
     if (map->data[i].key >= 0) {
       it->pos = i;
       it->num++;
