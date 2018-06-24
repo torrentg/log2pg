@@ -115,6 +115,7 @@ void help(void)
     "  -d, --daemon        Run as daemon (detach from terminal).\n"
     "  -f, --file=CONFIG   Set configuration file (default = " DEFAULT_CONFIG_FILE ").\n"
     "  -h, --help          Show this message and exit.\n"
+    "  -s, --seek0         Process also existing file contents.\n"
     "      --version       Show version info and exit.\n"
     "\n"
     "Exit status:\n"
@@ -144,9 +145,11 @@ void version(void)
 /**************************************************************************//**
  * @brief Executes parsing + monitoring + writing.
  * @param[in] filename Configuration filename.
+ * @param[in] daemonize Daemonize process.
+ * @param[in] seek0 Process files from start or not.
  * @return 0=OK, otherwise=KO.
  */
-int run(const char *filename, bool daemonize)
+int run(const char *filename, bool daemonize, bool seek0)
 {
   log_t log = {0};
   config_t cfg = {0};
@@ -204,7 +207,7 @@ int run(const char *filename, bool daemonize)
   }
 
   // initialize monitor object
-  rc = monitor_init(&monitor, &dirs, &mqueue1);
+  rc = monitor_init(&monitor, &dirs, &mqueue1, seek0);
   if (rc != EXIT_SUCCESS) {
     syslog(LOG_CRIT, "error initializing monitor");
     goto run_exit;
@@ -270,17 +273,20 @@ int main(int argc, char *argv[])
   // config filename
   char *filename = NULL;
   // short options
-  char* const options1 = "dhf:" ;
+  char* const options1 = "dhf:s" ;
   // long options (name + has_arg + flag + val)
   const struct option options2[] = {
       { "daemon",       0,  NULL,  'd' },
       { "file",         1,  NULL,  'f' },
       { "help",         0,  NULL,  'h' },
+      { "seek0",        0,  NULL,  's' },
       { "version",      0,  NULL,  301 },
       { NULL,           0,  NULL,   0  }
   };
   // act as a daemon
   bool daemonize = false;
+  // process all file contents
+  bool seek0 = false;
 
   // parsing options
   while (1)
@@ -312,6 +318,10 @@ int main(int argc, char *argv[])
           goto main_exit;
           break;
 
+      case 's': // -s or --seek0 (process existent file contents)
+          seek0 = true;
+          break;
+
       case 301: // --version (show version and exit)
           version();
           rc = EXIT_SUCCESS;
@@ -340,7 +350,7 @@ int main(int argc, char *argv[])
   }
 
   // running simulation
-  rc = run(filename, daemonize);
+  rc = run(filename, daemonize, seek0);
 
 main_exit:
   free(filename);

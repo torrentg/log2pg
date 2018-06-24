@@ -23,6 +23,7 @@
 #ifndef MONITOR_H
 #define MONITOR_H
 
+#include <stdbool.h>
 #include "map.h"
 #include "vector.h"
 #include "mqueue.h"
@@ -40,12 +41,14 @@ typedef struct monitor_t
   vector_t witems;
   //! Access to witems by watch descriptor.
   map_t dict;
+  //! File position at file opening (true=start, false=end).
+  bool seek0;
 } monitor_t;
 
 /**************************************************************************
  * Function declarations.
  */
-extern int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue);
+extern int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue, bool seek0);
 extern void* monitor_run(void *ptr);
 extern void monitor_reset(monitor_t *monitor);
 

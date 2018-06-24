@@ -24,6 +24,7 @@
 #define WITEM_H
 
 #include "log2pg.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <pcre2.h>
 #include "vector.h"
@@ -74,7 +75,7 @@ typedef struct witem_t
 /**************************************************************************
  * Function declarations.
  */
-extern witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr);
+extern witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr, bool seek0);
 extern void witem_free(void *obj);
 extern char* witem_discard_filename(const witem_t *item);
 

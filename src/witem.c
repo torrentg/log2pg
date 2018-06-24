@@ -63,9 +63,10 @@ void witem_free(void *ptr)
 /**************************************************************************//**
  * @brief Initialize buffer and data linked to regex match.
  * @param[in,out] item Watched item to initialize.
+ * @param[in] seek0 File pointer position (true=begin, false=last).
  * @return 0=OK, otherwise=error.
  */
-static int witem_init(witem_t *item)
+static int witem_init(witem_t *item, bool seek0)
 {
   if (item == NULL || item->ptr == NULL || item->file != NULL || item->buffer != NULL) {
     assert(false);
@@ -81,6 +82,9 @@ static int witem_init(witem_t *item)
   if (item->file == NULL) {
     syslog(LOG_WARNING, "error opening file '%s' - %s", item->filename, strerror(errno));
     return(1);
+  }
+  if (!seek0) {
+    fseek(item->file, 0, SEEK_END);
   }
 
   format_t *format = ((file_t *) item->ptr)->format;
@@ -138,9 +142,10 @@ static int witem_init(witem_t *item)
  * @param[in] filename File name.
  * @param[in] type Type of item.
  * @param[in] ptr Pointer to wdir or wfile.
+ * @param[in] seek0 File pointer position (true=begin, false=last).
  * @return Initialized object or NULL if error.
  */
-witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr)
+witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr, bool seek0)
 {
   if (filename == NULL) {
     assert(false);
@@ -168,7 +173,7 @@ witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr)
   ret->param_pos = NULL;
   ret->discard = NULL;
 
-  int rc = witem_init(ret);
+  int rc = witem_init(ret, seek0);
   if (rc != 0 || ret->filename == NULL) {
     witem_free(ret);
     return(NULL);

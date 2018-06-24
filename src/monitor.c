@@ -160,7 +160,7 @@ static int monitor_add_dir_pattern(monitor_t *monitor, dir_t *dir, file_t *file)
     }
     else {
       if (is_readable_file(realfilename)) {
-        witem_t *item = witem_alloc(realfilename, WITEM_FILE, file);
+        witem_t *item = witem_alloc(realfilename, WITEM_FILE, file, monitor->seek0);
         num_watches += monitor_add_watch(monitor, item, true);
       }
       else {
@@ -194,7 +194,7 @@ static int monitor_add_dir(monitor_t *monitor, dir_t *dir)
   int num_watches = 0;
 
   // adding directory
-  witem_t *item = witem_alloc(dir->path, WITEM_DIR, dir);
+  witem_t *item = witem_alloc(dir->path, WITEM_DIR, dir, monitor->seek0);
   num_watches += monitor_add_watch(monitor, item, true);
 
   // adding files matching patterns
@@ -352,7 +352,7 @@ static void process_event_dir_create(monitor_t *monitor, dir_t *dir, const char 
 
   // create a new witem and monitor it
   if (is_readable_file(filename)) {
-    witem_t *item = witem_alloc(filename, WITEM_FILE, file);
+    witem_t *item = witem_alloc(filename, WITEM_FILE, file, monitor->seek0);
     monitor_add_watch(monitor, item, true);
   }
   else {
@@ -518,9 +518,10 @@ void monitor_reset(monitor_t *monitor)
  * @param[in,out] monitor Monitor parameters.
  * @param[in] dirs User defined dir/patterns declared in config file.
  * @param[in] mqueue Message queue (monitor -> processor).
+ * @param[in] seek0 Open files position.
  * @return 0=OK, otherwise=KO.
  */
-int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue)
+int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue, bool seek0)
 {
   if (monitor == NULL || dirs == NULL || mqueue == NULL|| mqueue->status == MQUEUE_STATUS_UNINITIALIZED) {
     assert(false);
@@ -532,6 +533,7 @@ int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue)
   monitor->witems = (vector_t){0};
   monitor->dict = (map_t){0};
   monitor->mqueue = mqueue;
+  monitor->seek0 = seek0;
 
   monitor->ifd = inotify_init();
   if (monitor->ifd <= 0) {
