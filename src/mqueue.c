@@ -137,12 +137,12 @@ int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity)
     goto mqueue_init_err2;
   }
 
-  rc = sem_init(&(mqueue->sem1), 0, 0);
+  rc = pthread_cond_init(&(mqueue->tcond1), NULL);
   if (rc != 0) {
     goto mqueue_init_err3;
   }
 
-  rc = sem_init(&(mqueue->sem2), 0, (max_capacity==0?INT_MAX:max_capacity));
+  rc = pthread_cond_init(&(mqueue->tcond2), NULL);
   if (rc != 0) {
     goto mqueue_init_err4;
   }
@@ -161,9 +161,9 @@ int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity)
   return(0);
 
 mqueue_init_err5:
-  sem_destroy(&(mqueue->sem2));
+  pthread_cond_destroy(&(mqueue->tcond2));
 mqueue_init_err4:
-  sem_destroy(&(mqueue->sem1));
+  pthread_cond_destroy(&(mqueue->tcond1));
 mqueue_init_err3:
   pthread_mutex_destroy(&(mqueue->mutex));
 mqueue_init_err2:
@@ -198,8 +198,8 @@ void mqueue_reset(mqueue_t *mqueue, void (*item_free)(void*))
   mqueue->pos2 = 0;
   mqueue->max_capacity = 0;
   mqueue->status = MQUEUE_STATUS_UNINITIALIZED;
-  sem_destroy(&(mqueue->sem1));
-  sem_destroy(&(mqueue->sem2));
+  pthread_cond_destroy(&(mqueue->tcond1));
+  pthread_cond_destroy(&(mqueue->tcond2));
   pthread_mutex_destroy(&(mqueue->mutex));
   syslog(LOG_DEBUG, "mqueue - %s reseted", mqueue->name);
   free(mqueue->name);
@@ -246,53 +246,60 @@ static int mqueue_resize(mqueue_t *mqueue)
   return(0);
 }
 
+/**
+ * @brief Returns current time + millis
+ * @param millis Milliseconds to add to current time.
+ * @return timespec struct filled.
+ */
+static struct timespec mqueue_timespec(size_t millis)
+{
+  struct timespec ts = {0};
+
+  clock_gettime(CLOCK_REALTIME, &ts);
+
+  size_t seconds = millis/1000;
+  ts.tv_sec += seconds;
+  ts.tv_nsec += (millis-seconds*1000)*1000000;
+  if (ts.tv_nsec >= 1000000000) {
+    ts.tv_sec += 1;
+    ts.tv_nsec -= 1000000000;
+  }
+
+  return ts;
+}
+
 /**************************************************************************//**
- * @brief Waits until semaphore unlocks.
- * @param[in,out] sem Sempahore.
- * @param[in] millis Milliseconds to wait before return (0=waits forever).
- * @return 0 = semaphore unlocked,
+ * @brief Waits until condition unlocks.
+ * @param[in,out] tcond Condition variable.
+ * @param[in,out] mutex Mutex blocking read/write.
+ * @param[in] ts Time to stop (NULL = non timedout).
+ * @return 0 = mutex unlocked,
  *         MSG_TYPE_EINTR = signal interrupted wait,
  *         MSG_TYPE_TIMEOUT = wait timedout (not appended),
  *         MSG_TYPE_ERROR = error (not enought memory, not initialized, etc).
  */
-static int mqueue_sem_wait(sem_t *sem, size_t millis)
+static int mqueue_cond_wait(pthread_cond_t *tcond, pthread_mutex_t *mutex, struct timespec *ts)
 {
   int rc = 0;
 
-  if (millis == 0) {
-    rc = sem_wait(sem);
+  if (ts == NULL) {
+    rc = pthread_cond_wait(tcond, mutex);
   }
   else {
-    struct timespec ts = {0};
-    if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-      return(MSG_TYPE_ERROR);
-    }
-    size_t seconds = millis/1000;
-    ts.tv_sec += seconds;
-    ts.tv_nsec += (millis-seconds*1000)*1000000;
-    if (ts.tv_nsec >= 1000000000) {
-      ts.tv_sec += 1;
-      ts.tv_nsec -= 1000000000;
-    }
-
-    rc = sem_timedwait(sem, &ts);
+    rc = pthread_cond_timedwait(tcond, mutex, ts);
   }
 
-  // checks for signal interruption, timeout or error
-  if (rc != 0) {
-    if (errno == ETIMEDOUT) {
-      return(MSG_TYPE_TIMEOUT);
-    }
-    else if (errno == EINTR) {
-      return(MSG_TYPE_EINTR);
-    }
-    else {
-      syslog(LOG_ERR, "mqueue - %s", strerror(errno));
-      return(MSG_TYPE_ERROR);
-    }
+  if (rc == 0) {
+    // nothing to do
+  }
+  else if (rc == ETIMEDOUT) {
+    rc = MSG_TYPE_TIMEOUT;
+  }
+  else {
+    rc = MSG_TYPE_ERROR;
   }
 
-  return(0);
+  return rc;
 }
 
 /**************************************************************************//**
@@ -350,19 +357,30 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
   }
 
   int rc = 0;
+  struct timespec ts = {0};
+  struct timespec *pts = NULL;
 
-  // waits for an available slot
-  rc = mqueue_sem_wait(&(mqueue->sem2), millis);
-  if (rc != 0) {
-    return(rc);
-  }
-
-  if (mqueue->status == MQUEUE_STATUS_CLOSED) {
-    sem_post(&(mqueue->sem2));
-    return(MSG_TYPE_CLOSE);
+  if (millis > 0) {
+    ts = mqueue_timespec(millis);
+    pts = &ts;
   }
 
   pthread_mutex_lock(&(mqueue->mutex));
+  while (mqueue->max_capacity > 0 && mqueue_size(mqueue) >= mqueue->max_capacity &&
+         mqueue->status != MQUEUE_STATUS_CLOSED && rc == 0)
+  {
+    syslog(LOG_INFO, "waiting push starts, size=%zu, max=%zu", mqueue_size(mqueue), mqueue->max_capacity);
+    rc = mqueue_cond_wait(&(mqueue->tcond2), &(mqueue->mutex), pts);
+  }
+  syslog(LOG_INFO, "waiting push finished");
+
+  if (rc != 0) {
+    goto mqueue_push_exit;
+  }
+  else if (mqueue->status == MQUEUE_STATUS_CLOSED) {
+    rc = MSG_TYPE_CLOSE;
+    goto mqueue_push_exit;
+  }
 
   // check if obj exist in mqueue
   if (unique && mqueue_update_msg_type(mqueue, obj, type) > 0) {
@@ -392,13 +410,11 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
     mqueue->buffer[mqueue->pos2].type = type;
     mqueue->buffer[mqueue->pos2].data = obj;
   }
-  sem_post(&(mqueue->sem1));
+
   rc = 0;
 
 mqueue_push_exit:
-  if (rc != 0) {
-    sem_post(&(mqueue->sem2));
-  }
+  pthread_cond_signal(&(mqueue->tcond1));
   pthread_mutex_unlock(&(mqueue->mutex));
   return(rc);
 }
@@ -433,7 +449,6 @@ int mqueue_push(mqueue_t *mqueue, short type, void *obj, bool unique, size_t mil
  * @brief Retrieves an object from mqueue.
  * @details Assumes that this function is called uniquely by subscriber.
  * @details Waits until an object is available or timeout is elapsed.
- * @see http://pubs.opengroup.org/onlinepubs/9699919799/functions/sem_timedwait.html
  * @param[in,out] mqueue Message queue object.
  * @param[in] millis Milliseconds to wait before return (0=waits forever).
  * @return First message in queue.
@@ -455,22 +470,30 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
   }
 
   int rc = 0;
-
-  // waits for an available item
-  rc = mqueue_sem_wait(&(mqueue->sem1), millis);
-  if (rc != 0) {
-    return(msg_create(rc, NULL));
-  }
-
-  if (mqueue->status == MQUEUE_STATUS_CLOSED) {
-    sem_post(&(mqueue->sem1));
-    return(msg_create(MSG_TYPE_CLOSE, NULL));
-  }
-  assert(mqueue->status == MQUEUE_STATUS_NOTEMPTY);
-
-  // retrieve the item in a safe way
   msg_t ret;
+  struct timespec ts = {0};
+  struct timespec *pts = NULL;
+
+  if (millis > 0) {
+    ts = mqueue_timespec(millis);
+    pts = &ts;
+  }
+
   pthread_mutex_lock(&(mqueue->mutex));
+  while (mqueue_size(mqueue) == 0 && mqueue->status != MQUEUE_STATUS_CLOSED && rc == 0) {
+    syslog(LOG_INFO, "waiting pop starts");
+    rc = mqueue_cond_wait(&(mqueue->tcond1), &(mqueue->mutex), pts);
+  }
+  syslog(LOG_INFO, "waiting pop ends");
+
+  if (rc != 0) {
+    ret = msg_create(rc, NULL);
+    goto mqueue_pop_exit;
+  }
+  else if (mqueue->status == MQUEUE_STATUS_CLOSED) {
+    ret = msg_create(MSG_TYPE_CLOSE, NULL);
+    goto mqueue_pop_exit;
+  }
 
   ret = mqueue->buffer[mqueue->pos1];
   mqueue->buffer[mqueue->pos1].type = MSG_TYPE_NULL;
@@ -483,7 +506,8 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
     mqueue->pos1 = (mqueue->pos1+1)%(mqueue->capacity);
   }
 
-  sem_post(&(mqueue->sem2));
+mqueue_pop_exit:
+  pthread_cond_signal(&(mqueue->tcond2));
   pthread_mutex_unlock(&(mqueue->mutex));
   return(ret);
 }
@@ -514,7 +538,7 @@ msg_t mqueue_pop(mqueue_t *mqueue, size_t millis)
 
 /**************************************************************************//**
  * @brief Close the queue.
- * @details Assumes that this function is called uniquely by publisher.
+ * @details Caution, threads waiting for push/pop are not affected by close.
  * @param[in,out] mqueue Message queue object.
  */
 void mqueue_close(mqueue_t *mqueue)
@@ -525,11 +549,8 @@ void mqueue_close(mqueue_t *mqueue)
   }
   pthread_mutex_lock(&(mqueue->mutex));
   mqueue->status = MQUEUE_STATUS_CLOSED;
-  int size = 0;
-  sem_getvalue(&(mqueue->sem1), &size);
-  if (size <= 0) {
-    sem_post(&(mqueue->sem1));
-  }
+  pthread_cond_broadcast(&(mqueue->tcond1));
+  pthread_cond_broadcast(&(mqueue->tcond2));
   pthread_mutex_unlock(&(mqueue->mutex));
   syslog(LOG_DEBUG, "mqueue - %s closed", mqueue->name);
 }

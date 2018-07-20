@@ -3,13 +3,14 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
+#include "utils.h"
 #include "mqueue.h"
 
 #define UNUSED(x) (void)(x)
 #define DATA_LENGTH 100
 
 /*
- * gcc -g -o mqueue_test mqueue_test.c mqueue.c -lpthread
+ * gcc -g -I../src -o mqueue_test mqueue_test.c ../src/mqueue.c ../src/utils.c -lpthread
  * valgrind --tool=memcheck --leak-check=yes ./mqueue_test
  */
 
@@ -17,7 +18,7 @@ int value = 9999;
 
 size_t mqueue_size(const mqueue_t *mqueue)
 {
-  if (mqueue->status == 1) {
+  if (mqueue->status == MQUEUE_STATUS_EMPTY) {
     return(0);
   }
   
@@ -29,26 +30,12 @@ size_t mqueue_size(const mqueue_t *mqueue)
   return(ret);
 }
 
-int get_sem1_value(mqueue_t *mqueue)
-{
-  int val = 0;
-  sem_getvalue(&(mqueue->sem1), &val);
-  return(val);
-}
-
-int get_sem2_value(mqueue_t *mqueue)
-{
-  int val = 0;
-  sem_getvalue(&(mqueue->sem2), &val);
-  return(val);
-}
-
 void print_mqueue(mqueue_t *mqueue, const char *msg)
 {
   printf("%s = [buffer=", msg);
   for(size_t i=0; i<mqueue->capacity; i++) {
-    if (mqueue->buffer[i] == NULL) printf("-,");
-    else printf("%d,", *((int *)mqueue->buffer[i]));
+    if (mqueue->buffer[i].data == NULL) printf("-,");
+    else printf("%d,", *((int *)mqueue->buffer[i].data));
   }
   printf("; pos1=%zu; pos2=%zu; status=%d; size=%zu]\n", mqueue->pos1, mqueue->pos2, (int)mqueue->status, mqueue_size(mqueue));
 }
@@ -60,41 +47,39 @@ void test1()
   mqueue_t mqueue = {0};
   int items[DATA_LENGTH];
   void *item = NULL;
+  msg_t msg = {0};
 
   for(int i=0; i<DATA_LENGTH; i++) {
     items[i] = i;
   }
   
-  rc = mqueue_init(&mqueue, 0);
+  rc = mqueue_init(&mqueue, "mqueue1", 0);
   assert(rc == 0);
   assert(mqueue.capacity == 8);
-
-  //item = mqueue_pop(&mqueue, 0);
-  //assert(item == NULL);
 
   print_mqueue(&mqueue, "data1");
   
   for(int i=0; i<10; i++) {
-    mqueue_push(&mqueue, &(items[i]), false, 0);
-    assert(mqueue.buffer[i] == &(items[i]));
+    mqueue_push(&mqueue, MSG_TYPE_FILE0, &(items[i]), false, 0);
+    assert(mqueue.buffer[i].data == &(items[i]));
   }
   
   print_mqueue(&mqueue, "data2");
   assert(mqueue.capacity == 16);
   assert(mqueue_size(&mqueue)==10);
   
-  item = mqueue_pop(&mqueue, 0);
-  assert(item == &(items[0]));
+  msg = mqueue_pop(&mqueue, 0);
+  assert(msg.data == &(items[0]));
   assert(mqueue_size(&mqueue)==9);
 
-  item = mqueue_pop(&mqueue, 0);
-  assert(item == &(items[1]));
+  msg = mqueue_pop(&mqueue, 0);
+  assert(msg.data == &(items[1]));
   assert(mqueue_size(&mqueue)==8);
   
   print_mqueue(&mqueue, "data3");
 
   for(int i=10; i<24; i++) {
-    mqueue_push(&mqueue, &(items[i]), false, 0);
+    mqueue_push(&mqueue, MSG_TYPE_FILE0, &(items[i]), false, 0);
     print_mqueue(&mqueue, "data3-x");
   }
 
@@ -103,21 +88,21 @@ void test1()
   assert(mqueue_size(&mqueue)==22);
 
   for(int i=0; i<10; i++) {
-    item = mqueue_pop(&mqueue, 0);
-    assert(item == &(items[i+2]));
+    msg = mqueue_pop(&mqueue, 0);
+    assert(msg.data == &(items[i+2]));
   }
 
   print_mqueue(&mqueue, "data5");
 
   for(int i=24; i<32+5; i++) {
-    mqueue_push(&mqueue, &(items[i]), false, 0);
-    assert(mqueue.buffer[(i-2)%32] == &(items[i]));
+    mqueue_push(&mqueue, MSG_TYPE_FILE0, &(items[i]), false, 0);
+    assert(mqueue.buffer[(i-2)%32].data == &(items[i]));
   }
 
   print_mqueue(&mqueue, "data6");
 
   for(int i=32+5; i<48; i++) {
-    mqueue_push(&mqueue, &(items[i]), false, 0);
+    mqueue_push(&mqueue, MSG_TYPE_FILE0, &(items[i]), false, 0);
   }
 
   print_mqueue(&mqueue, "data7");
@@ -125,42 +110,38 @@ void test1()
   assert(mqueue.capacity == 64);
 
   for(int i=0; i<36; i++) {
-    assert(mqueue.buffer[i] == &(items[i+12]));
+    assert(mqueue.buffer[i].data == &(items[i+12]));
   }
   for(int i=38; i<64; i++) {
-    assert(mqueue.buffer[i] == NULL);
+    assert(mqueue.buffer[i].data == NULL);
   }
 
-  mqueue_reset(&mqueue);
+  mqueue_reset(&mqueue, NULL);
   assert(mqueue.buffer == NULL);
   assert(mqueue.capacity == 0);
 }
 
-void* test1_producer(void *ptr)
+void* test2_producer(void *ptr)
 {
   mqueue_t *mqueue = (mqueue_t *) ptr;
   for(size_t i=0; i<18; i++) {
-    mqueue_push(mqueue, &value, false, 0);
-    int sem1 = get_sem1_value(mqueue);
-    int sem2 = get_sem2_value(mqueue);
+    mqueue_push(mqueue, MSG_TYPE_FILE0, &value, false, 0);
     size_t size = mqueue_size(mqueue);
-    printf("producer push(%zu), size=%zu, sem1=%d, sem2=%d\n", i+1, size, sem1, sem2);
+    printf("producer push(%zu), size=%zu\n", i+1, size);
   }
   mqueue_close(mqueue);
   return(NULL);
 }
 
-void* test1_consumer(void *ptr)
+void* test2_consumer(void *ptr)
 {
   mqueue_t *mqueue = (mqueue_t *) ptr;
   for(size_t i=0; i<18; i++) {
     sleep(1);
-    void *ptr = mqueue_pop(mqueue, 0);
-    int sem1 = get_sem1_value(mqueue);
-    int sem2 = get_sem2_value(mqueue);
+    msg_t msg = mqueue_pop(mqueue, 0);
     size_t size = mqueue_size(mqueue);
-    printf("consumer pop(%zu), size=%zu, sem1=%d, sem2=%d\n", i+1, size, sem1, sem2);
-    if (ptr == MQUEUE_ITEM_CLOSE) break;
+    printf("consumer pop(%zu), size=%zu\n", i+1, size);
+    if (msg.type == MSG_TYPE_CLOSE) break;
   }
   return(NULL);
 }
@@ -172,41 +153,37 @@ void test2()
   pthread_t producer;
   pthread_t consumer;
 
-  mqueue_init(&mqueue, 10);
+  mqueue_init(&mqueue, "mqueue2", 10);
 
   printf("TEST2------------\n");
-  pthread_create(&producer, NULL, test1_producer, (void*)(&mqueue));
-  pthread_create(&consumer, NULL, test1_consumer, (void*)(&mqueue));
+  pthread_create(&producer, NULL, test2_producer, (void*)(&mqueue));
+  pthread_create(&consumer, NULL, test2_consumer, (void*)(&mqueue));
   pthread_join(producer, NULL);
   pthread_join(consumer, NULL);
   
-  mqueue_reset(&mqueue);
+  mqueue_reset(&mqueue, NULL);
 }
 
-void* test2_producer(void *ptr)
+void* test3_producer(void *ptr)
 {
   mqueue_t *mqueue = (mqueue_t *) ptr;
   for(size_t i=0; i<18; i++) {
     sleep(1);
-    mqueue_push(mqueue, &value, false, 0);
-    int sem1 = get_sem1_value(mqueue);
-    int sem2 = get_sem2_value(mqueue);
+    mqueue_push(mqueue, MSG_TYPE_FILE0, &value, false, 0);
     size_t size = mqueue_size(mqueue);
-    printf("producer push(%zu), size=%zu, sem1=%d, sem2=%d\n", i+1, size, sem1, sem2);
+    printf("producer push(%zu), size=%zu\n", i+1, size);
   }
   return(NULL);
 }
 
-void* test2_consumer(void *ptr)
+void* test3_consumer(void *ptr)
 {
   mqueue_t *mqueue = (mqueue_t *) ptr;
   for(size_t i=0; i<18; i++) {
-    void *ptr = mqueue_pop(mqueue, 0);
-    int sem1 = get_sem1_value(mqueue);
-    int sem2 = get_sem2_value(mqueue);
+    msg_t msg = mqueue_pop(mqueue, 0);
     size_t size = mqueue_size(mqueue);
-    printf("consumer pop(%zu), size=%zu, sem1=%d, sem2=%d\n", i+1, size, sem1, sem2);
-    if (ptr == MQUEUE_ITEM_CLOSE) break;
+    printf("consumer pop(%zu), size=%zu\n", i+1, size);
+    if (msg.type == MSG_TYPE_CLOSE) break;
   }
   return(NULL);
 }
@@ -218,15 +195,15 @@ void test3()
   pthread_t producer;
   pthread_t consumer;
 
-  mqueue_init(&mqueue, 10);
+  mqueue_init(&mqueue, "mqueue3", 10);
 
   printf("TEST3------------\n");
-  pthread_create(&producer, NULL, test2_producer, (void*)(&mqueue));
-  pthread_create(&consumer, NULL, test2_consumer, (void*)(&mqueue));
+  pthread_create(&producer, NULL, test3_producer, (void*)(&mqueue));
+  pthread_create(&consumer, NULL, test3_consumer, (void*)(&mqueue));
   pthread_join(producer, NULL);
   pthread_join(consumer, NULL);
 
-  mqueue_reset(&mqueue);
+  mqueue_reset(&mqueue, NULL);
 }
 
 int main(int argc, char *argv[])

@@ -25,7 +25,6 @@
 
 #include <stdbool.h>
 #include <pthread.h>
-#include <semaphore.h>
 
 /**************************************************************************//**
  * @brief Message between two threads.
@@ -65,10 +64,10 @@ typedef struct mqueue_t
   char *name;
   //! Mutex to protect data access.
   pthread_mutex_t mutex;
-  //! Semaphore to control pop().
-  sem_t sem1;
-  //! Semaphore to control push().
-  sem_t sem2;
+  //! Condition variable to control pop().
+  pthread_cond_t tcond1;
+  //! Condition variable to control push().
+  pthread_cond_t tcond2;
   //! Circular queue buffer.
   msg_t *buffer;
   //! Circular queue first index (included).
