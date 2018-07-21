@@ -8,7 +8,7 @@
 #define LIST_LENGTH 100
 
 /*
- * gcc -g -o map_test map_test.c map.c
+ * gcc -g -I../src  -o map_test map_test.c ../src/map.c
  * valgrind --tool=memcheck --leak-check=yes ./map_test
  */
 

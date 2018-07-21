@@ -9,7 +9,7 @@
 #define LIST_LENGTH 24
 
 /*
- * gcc -g -o vector_test vector_test.c vector.c
+ * gcc -g -I../src -o vector_test vector_test.c ../src/vector.c ../src/utils.c
  * valgrind --tool=memcheck --leak-check=yes ./vector_test
  */
 

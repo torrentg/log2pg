@@ -367,12 +367,9 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
 
   pthread_mutex_lock(&(mqueue->mutex));
   while (mqueue->max_capacity > 0 && mqueue_size(mqueue) >= mqueue->max_capacity &&
-         mqueue->status != MQUEUE_STATUS_CLOSED && rc == 0)
-  {
-    syslog(LOG_INFO, "waiting push starts, size=%zu, max=%zu", mqueue_size(mqueue), mqueue->max_capacity);
+         mqueue->status != MQUEUE_STATUS_CLOSED && rc == 0) {
     rc = mqueue_cond_wait(&(mqueue->tcond2), &(mqueue->mutex), pts);
   }
-  syslog(LOG_INFO, "waiting push finished");
 
   if (rc != 0) {
     goto mqueue_push_exit;
@@ -481,10 +478,8 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
 
   pthread_mutex_lock(&(mqueue->mutex));
   while (mqueue_size(mqueue) == 0 && mqueue->status != MQUEUE_STATUS_CLOSED && rc == 0) {
-    syslog(LOG_INFO, "waiting pop starts");
     rc = mqueue_cond_wait(&(mqueue->tcond1), &(mqueue->mutex), pts);
   }
-  syslog(LOG_INFO, "waiting pop ends");
 
   if (rc != 0) {
     ret = msg_create(rc, NULL);

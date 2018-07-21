@@ -56,7 +56,7 @@ static bool stringbuf_resize(stringbuf_t *obj, uint32_t new_capacity)
  * @details Resize data if required.
  * @param[in,out] obj The stringbuf object.
  * @param[in] str Content to append.
- * @param len Content length
+ * @param len Content length.
  * @return 0=OK, 1=KO.
  */
 int stringbuf_append_n(stringbuf_t *obj, const char *str, uint32_t len)
@@ -65,9 +65,11 @@ int stringbuf_append_n(stringbuf_t *obj, const char *str, uint32_t len)
   assert(obj->data != NULL || obj->capacity == 0);
   assert(obj->length < obj->capacity || (obj->capacity == 0 && obj->length == 0));
 
-  if (obj == NULL || str == NULL || len == 0) {
+  if (obj == NULL || str == NULL) {
     assert(false);
     return(1);
+  } else if (len == 0) {
+    return(0);
   }
 
   if (obj->capacity < obj->length + len + 1) {

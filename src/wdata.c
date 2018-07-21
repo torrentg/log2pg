@@ -72,7 +72,6 @@ static char* wdata_values_str(witem_t *item, const char *str)
     size_t j= item->param_pos[i];
     size_t pos = ovector[2*(j+1)];
     int len = (int)(ovector[2*(j+1)+1] - ovector[2*(j+1)]);
-    assert(len > 0);
     stringbuf_append_n(&ret, str+pos, len);
   }
 

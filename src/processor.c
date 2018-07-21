@@ -181,7 +181,6 @@ static void trace_chunk_values(const char *str, pcre2_match_data *md, const form
     stringbuf_append(&aux, "=");
     size_t pos = ovector[2*(i+1)];
     int len = (int)(ovector[2*(i+1)+1] - ovector[2*(i+1)]);
-    assert(len > 0);
     stringbuf_append_n(&aux, str+pos, len);
   }
 
