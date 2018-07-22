@@ -37,8 +37,6 @@ typedef struct monitor_t
   int ifd;
   //! Events queue between monitor and processor.
   mqueue_t *mqueue;
-  //! Master table of watched items.
-  vector_t witems;
   //! Access to witems by watch descriptor.
   map_t dict;
   //! File position at file opening (true=start, false=end).

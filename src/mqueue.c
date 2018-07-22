@@ -246,7 +246,7 @@ static int mqueue_resize(mqueue_t *mqueue)
   return(0);
 }
 
-/**
+/**************************************************************************//**
  * @brief Returns current time + millis
  * @param millis Milliseconds to add to current time.
  * @return timespec struct filled.
@@ -386,7 +386,7 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
   }
 
   // if mqueue is full then increase capacity
-  if ((mqueue->pos2+1)%(mqueue->capacity) == mqueue->pos1) {
+  if (mqueue_size(mqueue) >= mqueue->capacity) {
     rc = mqueue_resize(mqueue);
     if (rc != 0) {
       rc = MSG_TYPE_ERROR;

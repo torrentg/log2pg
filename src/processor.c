@@ -374,7 +374,13 @@ void* processor_run(void *ptr)
     }
     else {
       assert(msg.data != NULL);
-      process_witem(processor, (witem_t *) msg.data);
+      witem_t *item = (witem_t *) msg.data;
+
+      process_witem(processor, item);
+
+      if (msg.type == MSG_TYPE_FILE1) {
+        witem_free(item);
+      }
     }
   }
 

@@ -17,8 +17,8 @@ void print_buckets(map_t *map, const char *msg)
 {
   printf("%s = ", msg);
   for(size_t i=0; i<map->capacity; i++) {
-    if (map->data[i].key < 0) printf("-,");
-    else printf("%d,", map->data[i].key);
+    if (map->data[i].value == NULL) printf("-,");
+    else printf("%zu,", map->data[i].key);
   }
   printf("\n");
 }
@@ -29,7 +29,7 @@ void test1()
   int *items[LIST_LENGTH];
   map_t map = {0};
   int *item = NULL;
-  int rc = 0;
+  bool rc = true;
 
   for(int i=0; i<LIST_LENGTH; i++) {
     int *ptr = (int*) malloc(sizeof(int));
@@ -39,19 +39,19 @@ void test1()
 
   assert(map.size == 0);
   assert(map.capacity == 0);
-  assert(map.data == 0);
+  assert(map.data == NULL);
 
   map_reset(&map, free);
 
   assert(map.size == 0);
   assert(map.capacity == 0);
-  assert(map.data == 0);
+  assert(map.data == NULL);
 
   item = map_find(&map, 0);
   assert(item == NULL);
 
   rc = map_remove(&map, 0, NULL);
-  assert(rc == 1);
+  assert(rc == false);
 
   // data1 = -,-,-,-,-,45,-,-
   map_insert(&map, 45, items[45]);
@@ -103,12 +103,12 @@ void test1()
   // data5 = 64,1,2,3,4,65,6,66,67,68,-,-,-,45,-,-,-,-,-,-,-,-,-,-,-,-,-,59,60,61,62,63,
   rc = map_remove(&map, 5, free);
   print_buckets(&map, "data5");
-  assert(rc == 0);
+  assert(rc == true);
   assert(map.size == 16);
   assert(map.capacity == 32);
   assert(map_find(&map, 5) == NULL);
   rc = map_remove(&map, 5, free);
-  assert(rc == 1);
+  assert(rc == false);
 
   // data6 = 64,1,2,3,4,65,6,66,67,68,70,-,-,45,-,-,-,-,-,-,-,-,-,-,-,-,-,59,60,61,62,63,
   map_insert(&map, 70, items[70]);
@@ -120,12 +120,12 @@ void test1()
   // data7 = 64,1,2,3,4,65,6,67,68,70,-,-,-,45,-,-,-,-,-,-,-,-,-,-,-,-,-,59,60,61,62,63,
   rc = map_remove(&map, 66, free);
   print_buckets(&map, "data7");
-  assert(rc == 0);
+  assert(rc == true);
   assert(map.size == 16);
   assert(map.capacity == 32);
   assert(map_find(&map, 66) == NULL);
   rc = map_remove(&map, 66, free);
-  assert(rc == 1);
+  assert(rc == false);
 
   for(int i=1; i<=6; i++) {
     items[i] = NULL;

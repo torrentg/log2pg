@@ -24,21 +24,24 @@
 #define MAP_H
 
 #include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 
 /**************************************************************************//**
- * @brief Map bucket with positive int key.
+ * @brief Map bucket where key is a hash.
  */
 typedef struct map_bucket_t
 {
-  //! Bucket key (negative values = not assigned).
-  int key;
-  //! Bucket value.
+  //! Bucket key.
+  size_t key;
+  //! Bucket value (NULL = not assigned).
   void *value;
 } map_bucket_t;
 
 /**************************************************************************//**
- * @brief Basic hashmap whith positive int keys.
- * @details Collisions are resolved using open addressing.
+ * @brief Basic hashmap whith positive keys.
+ * @details Implements open addressing with linear probing and single-slot stepping.
+ * @see https://en.wikipedia.org/wiki/Open_addressing
  */
 typedef struct map_t
 {
@@ -66,9 +69,9 @@ typedef struct map_iterator_t
  * Function declarations.
  */
 extern map_bucket_t* map_next(const map_t *map, map_iterator_t *it);
-extern void* map_find(const map_t *map, int key);
-extern int map_insert(map_t *map, int key, void *value);
-extern int map_remove(map_t *map, int key, void (*item_free)(void *));
+extern void* map_find(const map_t *map, size_t key);
+extern bool map_insert(map_t *map, size_t key, void *value);
+extern bool map_remove(map_t *map, size_t key, void (*item_free)(void *));
 extern void map_reset(map_t *map, void (*item_free)(void *));
 
 #endif

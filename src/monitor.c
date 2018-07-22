@@ -73,6 +73,29 @@ static code_t eventnames[] = {
 };
 
 /**************************************************************************//**
+ * @brief Search watched descriptor by filename.
+ * @param[in] monitor Monitor parameters.
+ * @param[in] filename File name.
+ * @return The wd, or 0 if not found.
+ */
+static size_t search_wd_by_filename(monitor_t *monitor, const char *filename)
+{
+  map_bucket_t *bucket = NULL;
+  map_iterator_t it = {0};
+
+  while((bucket = map_next(&(monitor->dict), &it)) != NULL) {
+    witem_t *item = (witem_t *) bucket->value;
+    assert(item != NULL);
+    assert(item->filename != NULL);
+    if (item != NULL && item->filename != NULL && strcmp(filename, item->filename) == 0) {
+      return bucket->key;
+    }
+  }
+
+  return 0;
+}
+
+/**************************************************************************//**
  * @brief Add a inotify watch.
  * @param[in,out] monitor Monitor parameters.
  * @param[in] item Item to monitor.
@@ -94,7 +117,7 @@ static int monitor_add_watch(monitor_t *monitor, witem_t *item, bool freeonerror
     mask = IN_MODIFY;
   }
   else { // directory
-    mask = IN_CREATE|IN_MOVE_SELF|IN_MOVED_FROM|IN_MOVED_TO|IN_EXCL_UNLINK|IN_ONLYDIR;
+    mask = IN_CREATE|IN_MOVE_SELF|IN_MOVED_FROM|IN_MOVED_TO|IN_EXCL_UNLINK|IN_ONLYDIR|IN_DELETE;
   }
 
   wd = inotify_add_watch(monitor->ifd, item->filename, mask);
@@ -107,10 +130,6 @@ static int monitor_add_watch(monitor_t *monitor, witem_t *item, bool freeonerror
     return(0);
   }
   else {
-    // insert item in the table of declared items
-    if (!vector_contains(&(monitor->witems), item)) {
-      vector_insert(&(monitor->witems), item);
-    }
     // update dictionary for fast retrieval
     map_insert(&(monitor->dict), wd, item);
     // notifies to other threads that a new file is available
@@ -151,21 +170,23 @@ static int monitor_add_dir_pattern(monitor_t *monitor, dir_t *dir, file_t *file)
     goto monitor_add_dir_pattern_exit;
   }
 
-  // adding existing matched files
-  for(int i=0; globbuf.gl_pathv[i]!=NULL; i++) {
+  // adding matched files
+  for(int i=0; globbuf.gl_pathv[i]!=NULL; i++)
+  {
     const char *realfilename = globbuf.gl_pathv[i];
-    int ipos = vector_find(&(monitor->witems), realfilename);
-    if (ipos >= 0) {
+
+    size_t wd = search_wd_by_filename(monitor, realfilename);
+    if (wd > 0) {
       syslog(LOG_WARNING, "monitor - file '%s' matched twice. Only first match applies", realfilename);
+      continue;
+    }
+
+    if (is_readable_file(realfilename)) {
+      witem_t *item = witem_alloc(realfilename, WITEM_FILE, file, monitor->seek0);
+      num_watches += monitor_add_watch(monitor, item, true);
     }
     else {
-      if (is_readable_file(realfilename)) {
-        witem_t *item = witem_alloc(realfilename, WITEM_FILE, file, monitor->seek0);
-        num_watches += monitor_add_watch(monitor, item, true);
-      }
-      else {
-        syslog(LOG_WARNING, "monitor - cannot access file %s", realfilename);
-      }
+      syslog(LOG_WARNING, "monitor - cannot access file %s", realfilename);
     }
   }
 
@@ -255,9 +276,13 @@ static void monitor_rm_watch(monitor_t *monitor, int wd)
 
   // remove item from map
   map_remove(&(monitor->dict), wd, NULL);
+
   // notify that something has changed
-  if (item->type == WITEM_FILE) {
+  if (item->type == WITEM_FILE && monitor->mqueue->status != MQUEUE_STATUS_CLOSED) {
     mqueue_push(monitor->mqueue, MSG_TYPE_FILE1, item, true, 0);
+  }
+  else {
+    witem_free(item);
   }
 }
 
@@ -339,17 +364,6 @@ static void process_event_dir_create(monitor_t *monitor, dir_t *dir, const char 
   file_t *file = dir->files.data[ipos];
   char *filename = concat(3, dir->path, "/", name);
 
-  // if witem was previously declared ...
-  ipos = vector_find(&(monitor->witems), filename);
-  if (ipos >= 0) {
-    syslog(LOG_DEBUG, "monitor - file '%s' was previously declared", filename);
-    witem_t *item = (witem_t *) monitor->witems.data[ipos];
-    assert(item->type == WITEM_FILE);
-    assert(item->ptr == file);
-    monitor_add_watch(monitor, item, false);
-    goto process_event_dir_create_exit;
-  }
-
   // create a new witem and monitor it
   if (is_readable_file(filename)) {
     witem_t *item = witem_alloc(filename, WITEM_FILE, file, monitor->seek0);
@@ -359,32 +373,22 @@ static void process_event_dir_create(monitor_t *monitor, dir_t *dir, const char 
     syslog(LOG_INFO, "monitor - '%s' is not a readable file", filename);
   }
 
-process_event_dir_create_exit:
   free(filename);
 }
 
 /**************************************************************************//**
- * @brief Process IN_MOVED_FROM event on a directory.
+ * @brief Process IN_DELETE|IN_MOVED_FROM event on a directory.
  * @param[in] monitor Monitor parameters.
  * @param[in] dir Directory where event ocurres.
  * @param[in] name File name (not a pattern).
  */
-static void process_event_dir_moved_from(monitor_t *monitor, dir_t *dir, const char *name)
+static void process_event_dir_delete(monitor_t *monitor, dir_t *dir, const char *name)
 {
   char *filename = concat(3, dir->path, "/", name);
-  map_bucket_t *bucket = NULL;
-  map_iterator_t it = {0};
-
-  while((bucket = map_next(&(monitor->dict), &it)) != NULL) {
-    witem_t *item = (witem_t *) bucket->value;
-    assert(item != NULL);
-    assert(item->filename != NULL);
-    if (item != NULL && item->filename != NULL && strcmp(filename, item->filename) == 0) {
-      monitor_rm_watch(monitor, bucket->key);
-      break;
-    }
+  size_t wd = search_wd_by_filename(monitor, filename);
+  if (wd > 0) {
+    monitor_rm_watch(monitor, wd);
   }
-
   free(filename);
 }
 
@@ -437,7 +441,7 @@ static void process_event_dir(monitor_t *monitor, const struct inotify_event *ev
   // file renamed or moved from this directory
   if (event->mask & IN_MOVED_FROM) {
     const char *name = event->name;
-    process_event_dir_moved_from(monitor, item->ptr, name);
+    process_event_dir_delete(monitor, item->ptr, name);
     return;
   }
 
@@ -445,6 +449,13 @@ static void process_event_dir(monitor_t *monitor, const struct inotify_event *ev
   if (event->mask & IN_MOVED_TO) {
     const char *name = event->name;
     process_event_dir_create(monitor, item->ptr, name);
+    return;
+  }
+
+  // file removed from this directory
+  if (event->mask & IN_DELETE) {
+    const char *name = event->name;
+    process_event_dir_delete(monitor, item->ptr, name);
     return;
   }
 
@@ -509,8 +520,7 @@ void monitor_reset(monitor_t *monitor)
   }
 
   monitor->mqueue = NULL;
-  map_reset(&(monitor->dict), NULL);
-  vector_reset(&(monitor->witems), witem_free);
+  map_reset(&(monitor->dict), witem_free);
 }
 
 /**************************************************************************//**
@@ -530,7 +540,6 @@ int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue, boo
 
   int rc = 0;
 
-  monitor->witems = (vector_t){0};
   monitor->dict = (map_t){0};
   monitor->mqueue = mqueue;
   monitor->seek0 = seek0;
