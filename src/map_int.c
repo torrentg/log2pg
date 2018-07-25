@@ -24,11 +24,21 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
-#include "map.h"
+#include "map_int.h"
 
 #define INITIAL_NUM_BUCKETS 8
 #define MAX_LOAD_FACTOR 0.75
 #define RESIZE_FACTOR 2
+
+/**************************************************************************//**
+ * @brief Hash function for int.
+ * @param[in] val Int value.
+ * @return The absolute value.
+ */
+static uint32_t map_int_hash(int val)
+{
+  return abs(val);
+}
 
 /**************************************************************************//**
  * @brief Resize a map.
@@ -37,14 +47,14 @@
  * @param[in] new_capacity The new map capacity.
  * @return true=OK, false=KO.
  */
-static bool map_resize(map_t *map, uint32_t new_capacity)
+static bool map_int_resize(map_int_t *map, uint32_t new_capacity)
 {
   if (map->size > map->capacity || new_capacity <= map->capacity) {
     assert(false);
     return(false);
   }
 
-  map_bucket_t *new_buckets = (map_bucket_t *) calloc(new_capacity, sizeof(map_bucket_t));
+  map_bucket_int_t *new_buckets = (map_bucket_int_t *) calloc(new_capacity, sizeof(map_bucket_int_t));
   if (new_buckets == NULL) {
     return(false);
   }
@@ -55,7 +65,7 @@ static bool map_resize(map_t *map, uint32_t new_capacity)
   }
 
   uint32_t old_capacity = map->capacity;
-  map_bucket_t *old_buckets = map->data;
+  map_bucket_int_t *old_buckets = map->data;
 
   map->data = new_buckets;
   map->capacity = new_capacity;
@@ -68,7 +78,7 @@ static bool map_resize(map_t *map, uint32_t new_capacity)
   bool rc = true;
   for(uint32_t i=0; i<old_capacity; i++) {
     if (old_buckets[i].value != NULL) {
-      rc &= map_insert(map, old_buckets[i].key, old_buckets[i].value);
+      rc &= map_int_insert(map, old_buckets[i].key, old_buckets[i].value);
     }
   }
 
@@ -82,7 +92,7 @@ static bool map_resize(map_t *map, uint32_t new_capacity)
  * @param[in,out] map The hash map.
  * @param[in] item_free Function to free an item (can be NULL).
  */
-void map_reset(map_t *map, void (*item_free)(void*))
+void map_int_reset(map_int_t *map, void (*item_free)(void*))
 {
   if (map == NULL) {
     return;
@@ -113,14 +123,14 @@ void map_reset(map_t *map, void (*item_free)(void*))
  * @param[in] key The object key (can exist in map or not).
  * @return Bucket index for the given key, or index bigger than capacity if error.
  */
-static uint32_t map_find_bucket(const map_t *map, size_t key)
+static uint32_t map_int_find_bucket(const map_int_t *map, int key)
 {
   if (map->capacity == 0) {
     return(UINT32_MAX);
   }
 
-  int ipos0 = key%(map->capacity);
-  int ipos1 = ipos0;
+  uint32_t ipos0 = map_int_hash(key)%(map->capacity);
+  uint32_t ipos1 = ipos0;
 
   do {
     if (map->data[ipos1].key == key) {
@@ -142,7 +152,7 @@ static uint32_t map_find_bucket(const map_t *map, size_t key)
  * @param[in] key The object key.
  * @return Value or NULL if not found.
  */
-void* map_find(const map_t *map, size_t key)
+void* map_int_find(const map_int_t *map, int key)
 {
   assert(map != NULL);
   assert(map->size <= map->capacity);
@@ -150,7 +160,7 @@ void* map_find(const map_t *map, size_t key)
     return(NULL);
   }
 
-  uint32_t ipos = map_find_bucket(map, key);
+  uint32_t ipos = map_int_find_bucket(map, key);
   if (ipos >= map->capacity || map->data[ipos].key != key) {
     return(NULL);
   }
@@ -168,7 +178,7 @@ void* map_find(const map_t *map, size_t key)
  * @param[in] value The object value.
  * @return true=OK, false=KO.
  */
-bool map_insert(map_t *map, size_t key, void *value)
+bool map_int_insert(map_int_t *map, int key, void *value)
 {
   assert(map != NULL);
   assert(map->size <= map->capacity);
@@ -178,16 +188,16 @@ bool map_insert(map_t *map, size_t key, void *value)
 
   bool enough_mem = true;
   if (map->data == NULL || map->capacity == 0) {
-    enough_mem = map_resize(map, INITIAL_NUM_BUCKETS);
+    enough_mem = map_int_resize(map, INITIAL_NUM_BUCKETS);
   }
   else if ((float)(map->size+1)/(float)(map->capacity) > MAX_LOAD_FACTOR) {
-    enough_mem = map_resize(map, RESIZE_FACTOR*(map->capacity));
+    enough_mem = map_int_resize(map, RESIZE_FACTOR*(map->capacity));
   }
   if (!enough_mem) {
     return(false);
   }
 
-  uint32_t ipos = map_find_bucket(map, key);
+  uint32_t ipos = map_int_find_bucket(map, key);
   if (ipos >= map->capacity) {
     return(false);
   }
@@ -211,7 +221,7 @@ bool map_insert(map_t *map, size_t key, void *value)
  * @param[in] item_free Function to free an item (can be NULL).
  * @return true=OK, false=KO.
  */
-bool map_remove(map_t *map, size_t key, void (*item_free)(void*))
+bool map_int_remove(map_int_t *map, int key, void (*item_free)(void*))
 {
   assert(map != NULL);
   assert(map->size <= map->capacity);
@@ -223,7 +233,7 @@ bool map_remove(map_t *map, size_t key, void (*item_free)(void*))
     return(false);
   }
 
-  uint32_t ipos0 = map_find_bucket(map, key);
+  uint32_t ipos0 = map_int_find_bucket(map, key);
   if (ipos0 >= map->capacity || map->data[ipos0].key != key) {
     // key is not in the table
     return(false);
@@ -246,7 +256,7 @@ bool map_remove(map_t *map, size_t key, void (*item_free)(void*))
       break;
     }
 
-    k = (map->data[ipos1].key)%(map->capacity);
+    k = map_int_hash(map->data[ipos1].key)%(map->capacity);
     if ((ipos1 > ipos0 && (k <= ipos0 || k > ipos1)) || (ipos1 < ipos0 && (k <= ipos0 && k > ipos1))) {
       map->data[ipos0] = map->data[ipos1];
       ipos0 = ipos1;
@@ -265,7 +275,7 @@ bool map_remove(map_t *map, size_t key, void (*item_free)(void*))
  * @param[in,out] it Map iterator.
  * @return Pointer to next bucket or NULL if error or no more elements.
  */
-map_bucket_t* map_next(const map_t *map, map_iterator_t *it)
+map_bucket_int_t* map_int_next(const map_int_t *map, map_iterator_t *it)
 {
   assert(map != NULL);
   assert(map->size <= map->capacity);

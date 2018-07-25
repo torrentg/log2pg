@@ -20,42 +20,41 @@
 //
 //===========================================================================
 
-#ifndef MAP_H
-#define MAP_H
+#ifndef MAP_INT_H
+#define MAP_INT_H
 
 #include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
 
 /**************************************************************************//**
- * @brief Map bucket where key is a hash.
+ * @brief Map bucket where key is an int.
  */
-typedef struct map_bucket_t
+typedef struct map_bucket_int_t
 {
   //! Bucket key.
-  size_t key;
+  int key;
   //! Bucket value (NULL = not assigned).
   void *value;
-} map_bucket_t;
+} map_bucket_int_t;
 
 /**************************************************************************//**
- * @brief Basic hashmap whith positive keys.
+ * @brief Basic hashmap whith int keys.
  * @details Implements open addressing with linear probing and single-slot stepping.
  * @see https://en.wikipedia.org/wiki/Open_addressing
  */
-typedef struct map_t
+typedef struct map_int_t
 {
   //! Map buckets.
-  map_bucket_t *data;
+  map_bucket_int_t *data;
   //! Number of buckets.
   uint32_t capacity;
   //! Number of entries.
   uint32_t size;
-} map_t;
+} map_int_t;
 
 /**************************************************************************//**
  * @brief Map iterator.
- * @details Insert or remove invalidates iterator.
+ * @details map_insert() and map_remove() can invalidate iterators.
  */
 typedef struct map_iterator_t
 {
@@ -68,11 +67,11 @@ typedef struct map_iterator_t
 /**************************************************************************
  * Function declarations.
  */
-extern map_bucket_t* map_next(const map_t *map, map_iterator_t *it);
-extern void* map_find(const map_t *map, size_t key);
-extern bool map_insert(map_t *map, size_t key, void *value);
-extern bool map_remove(map_t *map, size_t key, void (*item_free)(void *));
-extern void map_reset(map_t *map, void (*item_free)(void *));
+extern map_bucket_int_t* map_int_next(const map_int_t *map, map_iterator_t *it);
+extern void* map_int_find(const map_int_t *map, int key);
+extern bool map_int_insert(map_int_t *map, int key, void *value);
+extern bool map_int_remove(map_int_t *map, int key, void (*item_free)(void *));
+extern void map_int_reset(map_int_t *map, void (*item_free)(void *));
 
 #endif
 

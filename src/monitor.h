@@ -24,7 +24,7 @@
 #define MONITOR_H
 
 #include <stdbool.h>
-#include "map.h"
+#include "map_int.h"
 #include "vector.h"
 #include "mqueue.h"
 
@@ -38,7 +38,7 @@ typedef struct monitor_t
   //! Events queue between monitor and processor.
   mqueue_t *mqueue;
   //! Access to witems by watch descriptor.
-  map_t dict;
+  map_int_t dict;
   //! File position at file opening (true=start, false=end).
   bool seek0;
 } monitor_t;

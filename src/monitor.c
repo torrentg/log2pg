@@ -80,10 +80,10 @@ static code_t eventnames[] = {
  */
 static size_t search_wd_by_filename(monitor_t *monitor, const char *filename)
 {
-  map_bucket_t *bucket = NULL;
+  map_bucket_int_t *bucket = NULL;
   map_iterator_t it = {0};
 
-  while((bucket = map_next(&(monitor->dict), &it)) != NULL) {
+  while((bucket = map_int_next(&(monitor->dict), &it)) != NULL) {
     witem_t *item = (witem_t *) bucket->value;
     assert(item != NULL);
     assert(item->filename != NULL);
@@ -131,7 +131,7 @@ static int monitor_add_watch(monitor_t *monitor, witem_t *item, bool freeonerror
   }
   else {
     // update dictionary for fast retrieval
-    map_insert(&(monitor->dict), wd, item);
+    map_int_insert(&(monitor->dict), wd, item);
     // notifies to other threads that a new file is available
     if (item->type == WITEM_FILE) {
       mqueue_push(monitor->mqueue, MSG_TYPE_FILE0, item, true, 0);
@@ -261,7 +261,7 @@ static void monitor_rm_watch(monitor_t *monitor, int wd)
   assert(wd >= 0);
 
   // retrieve watched item
-  witem_t *item = (witem_t *) map_find(&(monitor->dict), wd);
+  witem_t *item = (witem_t *) map_int_find(&(monitor->dict), wd);
   if (item == NULL) {
     syslog(LOG_WARNING, "monitor - non-existing witem for WD #%d", wd);
     assert(false);
@@ -275,7 +275,7 @@ static void monitor_rm_watch(monitor_t *monitor, int wd)
   inotify_rm_watch(monitor->ifd, wd);
 
   // remove item from map
-  map_remove(&(monitor->dict), wd, NULL);
+  map_int_remove(&(monitor->dict), wd, NULL);
 
   // notify that something has changed
   if (item->type == WITEM_FILE && monitor->mqueue->status != MQUEUE_STATUS_CLOSED) {
@@ -294,10 +294,10 @@ static void monitor_rm_watches(monitor_t *monitor)
 {
   assert(monitor != NULL);
 
-  map_bucket_t *bucket = NULL;
+  map_bucket_int_t *bucket = NULL;
   map_iterator_t it = {0};
 
-  while((bucket = map_next(&(monitor->dict), &it)) != NULL) {
+  while((bucket = map_int_next(&(monitor->dict), &it)) != NULL) {
     monitor_rm_watch(monitor, bucket->key);
     it.pos = it.pos - (it.pos==0?0:1);
     it.num--;
@@ -402,14 +402,14 @@ static void process_event_dir_delete(monitor_t *monitor, dir_t *dir, const char 
 static void process_event_dir_move_self(monitor_t *monitor, int wd, dir_t *dir)
 {
   char *path = concat(2, dir->path, "/");
-  map_bucket_t *bucket = NULL;
+  map_bucket_int_t *bucket = NULL;
   map_iterator_t it = {0};
 
   // removes watch from directory
   monitor_rm_watch(monitor, wd);
 
   // removes watch for all watched files in directory
-  while((bucket = map_next(&(monitor->dict), &it)) != NULL) {
+  while((bucket = map_int_next(&(monitor->dict), &it)) != NULL) {
     witem_t *item = (witem_t *) bucket->value;
     assert(item != NULL);
     assert(item->filename != NULL);
@@ -480,7 +480,7 @@ static void process_event(monitor_t *monitor, const struct inotify_event *event)
     return;
   }
 
-  witem_t *item = map_find(&(monitor->dict), event->wd);
+  witem_t *item = map_int_find(&(monitor->dict), event->wd);
   trace_event(event, item);
 
   if (item == NULL) {
@@ -520,7 +520,7 @@ void monitor_reset(monitor_t *monitor)
   }
 
   monitor->mqueue = NULL;
-  map_reset(&(monitor->dict), witem_free);
+  map_int_reset(&(monitor->dict), witem_free);
 }
 
 /**************************************************************************//**
@@ -540,7 +540,7 @@ int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue, boo
 
   int rc = 0;
 
-  monitor->dict = (map_t){0};
+  monitor->dict = (map_int_t){0};
   monitor->mqueue = mqueue;
   monitor->seek0 = seek0;
 
