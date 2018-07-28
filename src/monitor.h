@@ -25,6 +25,7 @@
 
 #include <stdbool.h>
 #include "map_int.h"
+#include "map_str.h"
 #include "vector.h"
 #include "mqueue.h"
 
@@ -37,8 +38,10 @@ typedef struct monitor_t
   int ifd;
   //! Events queue between monitor and processor.
   mqueue_t *mqueue;
-  //! Access to witems by watch descriptor.
-  map_int_t dict;
+  //! Access to witems by watch descriptor (holds witems).
+  map_int_t dict1;
+  //! Access to witems by filename.
+  map_str_t dict2;
   //! File position at file opening (true=start, false=end).
   bool seek0;
 } monitor_t;

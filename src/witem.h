@@ -44,6 +44,8 @@ typedef enum {
  */
 typedef struct witem_t
 {
+  //! Inotify watched descriptor.
+  int wd;
   //! Real filename with absolute path.
   char *filename;
   //! Type of item.

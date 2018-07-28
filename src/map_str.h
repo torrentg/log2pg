@@ -20,58 +20,58 @@
 //
 //===========================================================================
 
-#ifndef MAP_INT_H
-#define MAP_INT_H
+#ifndef MAP_STR_H
+#define MAP_STR_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
 /**************************************************************************//**
- * @brief Map bucket where key is an int.
+ * @brief Map bucket where key is a string.
  */
-typedef struct map_int_bucket_t
+typedef struct map_str_bucket_t
 {
   //! Bucket key.
-  int key;
+  const char *key;
   //! Bucket value (NULL = not assigned).
   void *value;
-} map_int_bucket_t;
+} map_str_bucket_t;
 
 /**************************************************************************//**
- * @brief Basic hashmap whith int keys.
+ * @brief Basic hashmap whith string keys.
  * @details Implements open addressing with linear probing and single-slot stepping.
  * @see https://en.wikipedia.org/wiki/Open_addressing
  */
-typedef struct map_int_t
+typedef struct map_str_t
 {
   //! Map buckets.
-  map_int_bucket_t *data;
+  map_str_bucket_t *data;
   //! Number of buckets.
   uint32_t capacity;
   //! Number of entries.
   uint32_t size;
-} map_int_t;
+} map_str_t;
 
 /**************************************************************************//**
  * @brief Map iterator.
  * @details map_insert() and map_remove() can invalidate iterators.
  */
-typedef struct map_int_iterator_t
+typedef struct map_str_iterator_t
 {
   //! Last visited index.
   uint32_t pos;
   //! Number of visited elements (0 = fresh iterator).
   uint32_t num;
-} map_int_iterator_t;
+} map_str_iterator_t;
 
 /**************************************************************************
  * Function declarations.
  */
-extern map_int_bucket_t* map_int_next(const map_int_t *map, map_int_iterator_t *it);
-extern void* map_int_find(const map_int_t *map, int key);
-extern bool map_int_insert(map_int_t *map, int key, void *value);
-extern bool map_int_remove(map_int_t *map, int key, void (*item_free)(void *));
-extern void map_int_reset(map_int_t *map, void (*item_free)(void *));
+extern map_str_bucket_t* map_str_next(const map_str_t *map, map_str_iterator_t *it);
+extern void* map_str_find(const map_str_t *map, const char *key);
+extern bool map_str_insert(map_str_t *map, const char *key, void *value);
+extern bool map_str_remove(map_str_t *map, const char *key, void (*item_free)(void *));
+extern void map_str_reset(map_str_t *map, void (*item_free)(void *));
 
 #endif
 

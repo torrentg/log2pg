@@ -158,6 +158,7 @@ witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr, bool se
     return(NULL);
   }
 
+  ret->wd = 0;
   ret->filename = strdup(filename);
   ret->type = type;
   ret->ptr = ptr;
