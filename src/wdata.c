@@ -31,6 +31,8 @@
 #include "stringbuf.h"
 #include "wdata.h"
 
+#define WITEM_BYTES sizeof(witem_t*)
+
 /**************************************************************************//**
  * @brief Frees memory space pointed by ptr.
  * @param[in] ptr Pointer to wdata object.
@@ -109,8 +111,14 @@ wdata_t* wdata_alloc(witem_t *item, const char *str)
 
   num_bytes += sizeof(witem_t *);
 
+  // we want memory aligned to (witem_t*)
+  if (num_bytes%WITEM_BYTES > 0) {
+    num_bytes += WITEM_BYTES - num_bytes%WITEM_BYTES;
+    assert(num_bytes%WITEM_BYTES == 0);
+  }
+
   // allocating object
-  wdata_t *ret = (wdata_t *) malloc(num_bytes);
+  wdata_t *ret = (wdata_t *) aligned_alloc(WITEM_BYTES, num_bytes);
   if (ret == NULL) {
     return(NULL);
   }
@@ -128,9 +136,11 @@ wdata_t* wdata_alloc(witem_t *item, const char *str)
     ptr++;
   }
 
-  char *aux = wdata_values_str(item, str);
-  syslog(LOG_DEBUG, "created wdata [address=%p, item=%p, values=%s]", (void *)ret, (void *)item, aux);
-  free(aux);
+  if (loglevel == LOG_DEBUG) {
+    char *aux = wdata_values_str(item, str);
+    syslog(LOG_DEBUG, "created wdata [address=%p, item=%p, values=%s]", (void *)ret, (void *)item, aux);
+    free(aux);
+  }
 
   return(ret);
 }

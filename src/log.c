@@ -62,7 +62,7 @@ static int get_code_value(CODE *code, const char *name)
 
 /**************************************************************************//**
  * @brief Initializes syslog.
- * @param[out] syslog_tag Syslog tag name (to be free by caller).
+ * @param[in,out] log Syslog object.
  * @param[in] cfg Configuration.
  */
 void log_init(log_t *log, const config_t *cfg)

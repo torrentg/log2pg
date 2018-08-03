@@ -195,7 +195,7 @@ witem_t* witem_alloc(const char *filename, witem_type_e type, void *ptr, bool se
 
 /**************************************************************************//**
  * @brief Returns the discard filename replacing variables.
- * @param[in] obj Watched item.
+ * @param[in] item Watched item.
  * @return The discard filename.
  */
 char* witem_discard_filename(const witem_t *item)

@@ -47,7 +47,7 @@
  * Public variables.
  */
 extern volatile sig_atomic_t keep_running;
-//TODO: add loglevel
+extern int loglevel;
 
 /**************************************************************************
  * Public functions.

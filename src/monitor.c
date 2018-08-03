@@ -258,7 +258,7 @@ static void monitor_rm_watch(monitor_t *monitor, int wd)
   map_str_remove(&(monitor->dict2), item->filename, NULL);
 
   // notify that something has changed
-  if (item->type == WITEM_FILE && monitor->mqueue->status != MQUEUE_STATUS_CLOSED) {
+  if (item->type == WITEM_FILE && monitor->mqueue->open) {
     mqueue_push(monitor->mqueue, MSG_TYPE_FILE1, item, true, 0);
   }
   else {
@@ -514,7 +514,7 @@ void monitor_reset(monitor_t *monitor)
  */
 int monitor_init(monitor_t *monitor, const vector_t *dirs, mqueue_t *mqueue, bool seek0)
 {
-  if (monitor == NULL || dirs == NULL || mqueue == NULL|| mqueue->status == MQUEUE_STATUS_UNINITIALIZED) {
+  if (monitor == NULL || dirs == NULL || mqueue == NULL) {
     assert(false);
     return(1);
   }

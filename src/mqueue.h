@@ -39,16 +39,6 @@ typedef struct msg_t
 } msg_t;
 
 /**************************************************************************//**
- * @brief Message queue status.
- */
-typedef enum {
-  MQUEUE_STATUS_UNINITIALIZED = 0, // Uninitialized message queue.
-  MQUEUE_STATUS_EMPTY,             // Empty message queue.
-  MQUEUE_STATUS_NOTEMPTY,          // Not empty message queue.
-  MQUEUE_STATUS_CLOSED             // Closed message queue.
-} mqueue_status_e;
-
-/**************************************************************************//**
  * @brief Message queue between 2 threads:
  *        - circular queue
  *        - thread-safe
@@ -78,11 +68,34 @@ typedef struct mqueue_t
   size_t capacity;
   //! Message queue maximum capacity (0=unlimited).
   size_t max_capacity;
-  //! Message queue status (internal usage).
-  mqueue_status_e status;
-  //TODO: num_msgs, avg_time, etc.
+  //! Number of received messages (push).
+  size_t num_incoming_msgs;
+  //! Number of delivered messages (pop).
+  size_t num_delivered_msgs;
+  //! Elapsed time push waited because queue is full.
+  size_t millis_waiting_push;
+  //! Elapsed time pop waiting because queue is empty.
+  size_t millis_waiting_pop;
+  //! Indicate if there are messages in the queue.
+  bool empty;
+  //! Indicate if mqueue is open or closed.
+  bool open;
 } mqueue_t;
 
+/**************************************************************************
+ * Function declarations.
+ */
+extern msg_t msg_create(short type, void *data);
+extern const char* msg_type_str(short type);
+extern int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity);
+extern int mqueue_push(mqueue_t *mqueue, short type, void *obj, bool unique, size_t millis);
+extern msg_t mqueue_pop(mqueue_t *mqueue, size_t millis);
+extern void mqueue_reset(mqueue_t *mqueue, void (*item_free)(void*));
+extern void mqueue_close(mqueue_t *mqueue);
+
+/**************************************************************************
+ * Defines used by application.
+ */
 // Message type indicating an empty message (data=NULL).
 #define MSG_TYPE_NULL 0
 // Message type indicating an error.
@@ -104,16 +117,4 @@ typedef struct mqueue_t
 // Message type indicating a matched content.
 #define MSG_TYPE_MATCH1 31
 
-/**************************************************************************
- * Function declarations.
- */
-extern msg_t msg_create(short type, void *data);
-extern const char* msg_type_str(short type);
-extern int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity);
-extern int mqueue_push(mqueue_t *mqueue, short type, void *obj, bool unique, size_t millis);
-extern msg_t mqueue_pop(mqueue_t *mqueue, size_t millis);
-extern void mqueue_reset(mqueue_t *mqueue, void (*item_free)(void*));
-extern void mqueue_close(mqueue_t *mqueue);
-
 #endif
-

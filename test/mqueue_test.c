@@ -13,12 +13,12 @@
  * gcc -g -I../src -o mqueue_test mqueue_test.c ../src/mqueue.c ../src/utils.c -lpthread
  * valgrind --tool=memcheck --leak-check=yes ./mqueue_test
  */
-
+int loglevel = 0;
 int value = 9999;
 
 size_t mqueue_size(const mqueue_t *mqueue)
 {
-  if (mqueue->status == MQUEUE_STATUS_EMPTY) {
+  if (mqueue->empty) {
     return(0);
   }
   
@@ -37,7 +37,8 @@ void print_mqueue(mqueue_t *mqueue, const char *msg)
     if (mqueue->buffer[i].data == NULL) printf("-,");
     else printf("%d,", *((int *)mqueue->buffer[i].data));
   }
-  printf("; pos1=%zu; pos2=%zu; status=%d; size=%zu]\n", mqueue->pos1, mqueue->pos2, (int)mqueue->status, mqueue_size(mqueue));
+  printf("; pos1=%zu; pos2=%zu; open=%s; size=%zu]\n", 
+         mqueue->pos1, mqueue->pos2, (mqueue->open?"true":"false"), mqueue_size(mqueue));
 }
 
 // test mqueue without blocks

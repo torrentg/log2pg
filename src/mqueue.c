@@ -89,7 +89,7 @@ const char* msg_type_str(short type)
  */
 static size_t mqueue_size(const mqueue_t *mqueue)
 {
-  if (mqueue->status == MQUEUE_STATUS_EMPTY) {
+  if (mqueue->empty) {
     return(0);
   }
 
@@ -124,9 +124,14 @@ int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity)
   mqueue->pos1 = 0;
   mqueue->pos2 = 0;
   mqueue->max_capacity = max_capacity;
-  mqueue->status = MQUEUE_STATUS_UNINITIALIZED;
-  mqueue->name = strdup(name);
+  mqueue->open = false;
+  mqueue->empty = true;
+  mqueue->num_incoming_msgs = 0U;
+  mqueue->num_delivered_msgs = 0U;
+  mqueue->millis_waiting_push = 0U;
+  mqueue->millis_waiting_pop = 0U;
 
+  mqueue->name = strdup(name);
   if (mqueue->name == NULL) {
     rc = 1;
     goto mqueue_init_err1;
@@ -156,7 +161,7 @@ int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity)
 
   mqueue->pos2 = initial_capacity-1;
   mqueue->capacity = initial_capacity;
-  mqueue->status = MQUEUE_STATUS_EMPTY;
+  mqueue->open = true;
   syslog(LOG_DEBUG, "mqueue - %s initialized", mqueue->name);
   return(0);
 
@@ -179,9 +184,14 @@ mqueue_init_err1:
  */
 void mqueue_reset(mqueue_t *mqueue, void (*item_free)(void*))
 {
-  if (mqueue == NULL || mqueue->status == MQUEUE_STATUS_UNINITIALIZED) {
+  if (mqueue == NULL) {
     return;
   }
+
+  syslog(LOG_DEBUG, "mqueue - %s reseted [incoming_msgs=%zu, delivered_msgs=%zu, millis_push=%zu, millis_pop=%zu]",
+         mqueue->name, mqueue->num_incoming_msgs, mqueue->num_delivered_msgs,
+         mqueue->millis_waiting_push, mqueue->millis_waiting_pop);
+
   // free objects (only if item_free not NULL)
   if (mqueue->buffer != NULL && item_free != NULL) {
     size_t len = mqueue_size(mqueue);
@@ -197,11 +207,15 @@ void mqueue_reset(mqueue_t *mqueue, void (*item_free)(void*))
   mqueue->pos1 = 0;
   mqueue->pos2 = 0;
   mqueue->max_capacity = 0;
-  mqueue->status = MQUEUE_STATUS_UNINITIALIZED;
+  mqueue->open = false;
+  mqueue->empty = true;
+  mqueue->num_incoming_msgs = 0U;
+  mqueue->num_delivered_msgs = 0U;
+  mqueue->millis_waiting_push = 0U;
+  mqueue->millis_waiting_pop = 0U;
   pthread_cond_destroy(&(mqueue->tcond1));
   pthread_cond_destroy(&(mqueue->tcond2));
   pthread_mutex_destroy(&(mqueue->mutex));
-  syslog(LOG_DEBUG, "mqueue - %s reseted", mqueue->name);
   free(mqueue->name);
 }
 
@@ -257,12 +271,14 @@ static struct timespec mqueue_timespec(size_t millis)
 
   clock_gettime(CLOCK_REALTIME, &ts);
 
-  size_t seconds = millis/1000;
-  ts.tv_sec += seconds;
-  ts.tv_nsec += (millis-seconds*1000)*1000000;
-  if (ts.tv_nsec >= 1000000000) {
-    ts.tv_sec += 1;
-    ts.tv_nsec -= 1000000000;
+  if (millis > 0) {
+    size_t seconds = millis/1000;
+    ts.tv_sec += seconds;
+    ts.tv_nsec += (millis-seconds*1000)*1000000;
+    if (ts.tv_nsec >= 1000000000) {
+      ts.tv_sec += 1;
+      ts.tv_nsec -= 1000000000;
+    }
   }
 
   return ts;
@@ -274,8 +290,7 @@ static struct timespec mqueue_timespec(size_t millis)
  * @param[in,out] mutex Mutex blocking read/write.
  * @param[in] ts Time to stop (NULL = non timedout).
  * @return 0 = mutex unlocked,
- *         MSG_TYPE_EINTR = signal interrupted wait,
- *         MSG_TYPE_TIMEOUT = wait timedout (not appended),
+ *         MSG_TYPE_TIMEOUT = wait timedout,
  *         MSG_TYPE_ERROR = error (not enought memory, not initialized, etc).
  */
 static int mqueue_cond_wait(pthread_cond_t *tcond, pthread_mutex_t *mutex, struct timespec *ts)
@@ -315,8 +330,7 @@ static int mqueue_update_msg_type(const mqueue_t *mqueue, void *obj, short type)
   int ret = 0;
   size_t len = mqueue_size(mqueue);
 
-  for(size_t i=0; i<=len; i++)
-  {
+  for(size_t i=0; i<=len; i++) {
     size_t pos = (mqueue->pos1+i)%(mqueue->capacity);
     if (mqueue->buffer[pos].data == obj) {
       mqueue->buffer[pos].type = type;
@@ -348,11 +362,11 @@ static int mqueue_update_msg_type(const mqueue_t *mqueue, void *obj, short type)
  */
 static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool unique, size_t millis)
 {
-  if (mqueue == NULL || mqueue->status == MQUEUE_STATUS_UNINITIALIZED) {
+  if (mqueue == NULL) {
     assert(false);
     return(MSG_TYPE_ERROR);
   }
-  else if (mqueue->status == MQUEUE_STATUS_CLOSED) {
+  else if (!mqueue->open) {
     return(MSG_TYPE_CLOSE);
   }
 
@@ -366,15 +380,15 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
   }
 
   pthread_mutex_lock(&(mqueue->mutex));
-  while (mqueue->max_capacity > 0 && mqueue_size(mqueue) >= mqueue->max_capacity &&
-         mqueue->status != MQUEUE_STATUS_CLOSED && rc == 0) {
+  while (rc == 0 && mqueue->open &&
+         mqueue->max_capacity > 0 && mqueue_size(mqueue) >= mqueue->max_capacity) {
     rc = mqueue_cond_wait(&(mqueue->tcond2), &(mqueue->mutex), pts);
   }
 
   if (rc != 0) {
     goto mqueue_push_exit;
   }
-  else if (mqueue->status == MQUEUE_STATUS_CLOSED) {
+  if (!mqueue->open) {
     rc = MSG_TYPE_CLOSE;
     goto mqueue_push_exit;
   }
@@ -395,12 +409,12 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
   }
 
   // add obj to mqueue
-  if (mqueue->status == MQUEUE_STATUS_EMPTY) {
+  if (mqueue->empty) {
     mqueue->pos1 = 0;
     mqueue->pos2 = 0;
     mqueue->buffer[0].type = type;
     mqueue->buffer[0].data = obj;
-    mqueue->status = MQUEUE_STATUS_NOTEMPTY;
+    mqueue->empty = false;
   }
   else {
     mqueue->pos2 = (mqueue->pos2+1)%(mqueue->capacity);
@@ -408,6 +422,7 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
     mqueue->buffer[mqueue->pos2].data = obj;
   }
 
+  mqueue->num_incoming_msgs++;
   rc = 0;
 
 mqueue_push_exit:
@@ -429,8 +444,10 @@ int mqueue_push(mqueue_t *mqueue, short type, void *obj, bool unique, size_t mil
 
   struct timeval t2 = {0};
   gettimeofday(&t2, NULL);
+  mqueue->millis_waiting_push += difftimeval(&t1, &t2);
 
-  syslog(LOG_DEBUG, "mqueue - %s.push(%s, %p, %s, %zu) = %s, etime = %.3lf sec",
+  if (loglevel == LOG_DEBUG) {
+    syslog(LOG_DEBUG, "mqueue - %s.push(%s, %p, %s, %zu) = %s, etime = %.3lf sec",
          mqueue->name,
          msg_type_str(type),
          obj,
@@ -438,6 +455,7 @@ int mqueue_push(mqueue_t *mqueue, short type, void *obj, bool unique, size_t mil
          millis,
          (rc==0?"OK":msg_type_str(rc)),
          difftimeval(&t1, &t2));
+  }
 
   return rc;
 }
@@ -458,11 +476,11 @@ int mqueue_push(mqueue_t *mqueue, short type, void *obj, bool unique, size_t mil
  */
 static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
 {
-  if (mqueue == NULL || mqueue->status == MQUEUE_STATUS_UNINITIALIZED) {
+  if (mqueue == NULL) {
     assert(false);
     return(msg_create(MSG_TYPE_ERROR, NULL));
   }
-  else if (mqueue->status == MQUEUE_STATUS_CLOSED) {
+  else if (!mqueue->open) {
     return(msg_create(MSG_TYPE_CLOSE, NULL));
   }
 
@@ -477,7 +495,7 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
   }
 
   pthread_mutex_lock(&(mqueue->mutex));
-  while (mqueue_size(mqueue) == 0 && mqueue->status != MQUEUE_STATUS_CLOSED && rc == 0) {
+  while (rc == 0 && mqueue->open && mqueue_size(mqueue) == 0) {
     rc = mqueue_cond_wait(&(mqueue->tcond1), &(mqueue->mutex), pts);
   }
 
@@ -485,7 +503,7 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
     ret = msg_create(rc, NULL);
     goto mqueue_pop_exit;
   }
-  else if (mqueue->status == MQUEUE_STATUS_CLOSED) {
+  else if (!mqueue->open) {
     ret = msg_create(MSG_TYPE_CLOSE, NULL);
     goto mqueue_pop_exit;
   }
@@ -495,11 +513,13 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
   mqueue->buffer[mqueue->pos1].data = NULL;
 
   if (mqueue->pos1 == mqueue->pos2) {
-    mqueue->status = MQUEUE_STATUS_EMPTY;
+    mqueue->empty = true;
   }
   else {
     mqueue->pos1 = (mqueue->pos1+1)%(mqueue->capacity);
   }
+
+  mqueue->num_delivered_msgs++;
 
 mqueue_pop_exit:
   pthread_cond_signal(&(mqueue->tcond2));
@@ -520,13 +540,16 @@ msg_t mqueue_pop(mqueue_t *mqueue, size_t millis)
 
   struct timeval t2 = {0};
   gettimeofday(&t2, NULL);
+  mqueue->millis_waiting_pop += difftimeval(&t1, &t2);
 
-  syslog(LOG_DEBUG, "mqueue - %s.pop(%zu) = [%s, %p], etime = %.3lf sec",
+  if (loglevel == LOG_DEBUG) {
+    syslog(LOG_DEBUG, "mqueue - %s.pop(%zu) = [%s, %p], etime = %.3lf sec",
          mqueue->name,
          millis,
          msg_type_str(ret.type),
          ret.data,
          difftimeval(&t1, &t2));
+  }
 
   return ret;
 }
@@ -538,12 +561,12 @@ msg_t mqueue_pop(mqueue_t *mqueue, size_t millis)
  */
 void mqueue_close(mqueue_t *mqueue)
 {
-  if (mqueue == NULL || mqueue->status == MQUEUE_STATUS_UNINITIALIZED) {
+  if (mqueue == NULL) {
     assert(false);
     return;
   }
   pthread_mutex_lock(&(mqueue->mutex));
-  mqueue->status = MQUEUE_STATUS_CLOSED;
+  mqueue->open = false;
   pthread_cond_broadcast(&(mqueue->tcond1));
   pthread_cond_broadcast(&(mqueue->tcond2));
   pthread_mutex_unlock(&(mqueue->mutex));

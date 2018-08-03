@@ -48,6 +48,7 @@
  */
 volatile sig_atomic_t keep_running = 1;
 volatile pthread_t *thread1 = NULL;
+int loglevel = LOG_INFO;
 int rc = EXIT_SUCCESS;
 
 /**************************************************************************//**
@@ -174,6 +175,7 @@ int run(const char *filename, bool daemonize, bool seek0)
   // init log
   log_init(&log, &cfg);
   syslog(LOG_INFO, "log2pg started");
+  loglevel = log.level;
 
   // initialize message queue between monitor-processor
   rc = mqueue_init(&mqueue1, "mqueue1", 0);

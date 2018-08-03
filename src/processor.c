@@ -166,6 +166,10 @@ static int witem_flush_buffer(witem_t *item)
  */
 static void trace_chunk_values(const char *str, pcre2_match_data *md, const format_t *format)
 {
+  if (loglevel != LOG_DEBUG) {
+    return;
+  }
+
   stringbuf_t aux = {0};
   PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);
 
@@ -313,6 +317,8 @@ static void process_witem(processor_t *processor, witem_t *item)
   assert(processor != NULL);
   assert(item != NULL);
   assert(item->type == WITEM_FILE);
+  assert(item->file != NULL);
+  assert(item->buffer != NULL);
 
   bool more = true;
 
