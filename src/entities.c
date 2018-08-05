@@ -406,12 +406,12 @@ int dir_file_match(dir_t *dir, const char *name)
 
   for(uint32_t i=0; i<dir->files.size; i++) {
     file_t *file = (file_t *) dir->files.data[i];
-    assert(file != NULL);
-    assert(file->pattern != NULL);
-    if (file != NULL && file->pattern != NULL) {
-      if (fnmatch(file->pattern, name, FNM_PATHNAME|FNM_PERIOD) == 0) {
-        return(i);
-      }
+    if (file == NULL || file->pattern == NULL) {
+      assert(false);
+      continue;
+    }
+    if (fnmatch(file->pattern, name, FNM_PATHNAME|FNM_PERIOD) == 0) {
+      return(i);
     }
   }
   return(-1);

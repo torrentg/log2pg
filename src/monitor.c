@@ -391,9 +391,11 @@ static void process_event_dir_move_self(monitor_t *monitor, int wd, dir_t *dir)
   // removes watch for all watched files in directory
   while((bucket = map_int_next(&(monitor->dict1), &it)) != NULL) {
     witem_t *item = (witem_t *) bucket->value;
-    assert(item != NULL);
-    assert(item->filename != NULL);
-    if (item != NULL && item->filename != NULL && starts_with(path, item->filename)) {
+    if (item == NULL || item->filename == NULL) {
+      assert(false);
+      continue;
+    }
+    if (starts_with(path, item->filename)) {
       monitor_rm_watch(monitor, bucket->key);
       it.pos = it.pos - (it.pos==0?0:1);
       it.num--;
@@ -455,7 +457,7 @@ static void process_event_dir(monitor_t *monitor, const struct inotify_event *ev
  */
 static void process_event(monitor_t *monitor, const struct inotify_event *event)
 {
-  if (event == NULL || event == NULL || event->wd < 0) {
+  if (event == NULL || event->wd < 0) {
     assert(false);
     return;
   }

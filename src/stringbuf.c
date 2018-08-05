@@ -61,16 +61,14 @@ static bool stringbuf_resize(stringbuf_t *obj, uint32_t new_capacity)
  */
 int stringbuf_append_n(stringbuf_t *obj, const char *str, uint32_t len)
 {
-  assert(obj != NULL);
-  assert(obj->data != NULL || obj->capacity == 0);
-  assert(obj->length < obj->capacity || (obj->capacity == 0 && obj->length == 0));
-
   if (obj == NULL || str == NULL) {
     assert(false);
     return(1);
   } else if (len == 0) {
     return(0);
   }
+  assert(obj->data != NULL || obj->capacity == 0);
+  assert(obj->length < obj->capacity || (obj->capacity == 0 && obj->length == 0));
 
   if (obj->capacity < obj->length + len + 1) {
     size_t new_capacity = MAX(RESIZE_FACTOR*(size_t)(obj->capacity), (size_t)(obj->length)+len+1);

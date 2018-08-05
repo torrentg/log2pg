@@ -173,12 +173,11 @@ static uint32_t map_str_find_bucket(const map_str_t *map, const char *key)
  */
 void* map_str_find(const map_str_t *map, const char *key)
 {
-  assert(map->size <= map->capacity);
-
   if (map == NULL || key == NULL) {
     assert(false);
     return(NULL);
   }
+  assert(map->size <= map->capacity);
 
   uint32_t ipos = map_str_find_bucket(map, key);
   if (ipos >= map->capacity) {
@@ -201,11 +200,11 @@ void* map_str_find(const map_str_t *map, const char *key)
  */
 static bool map_str_insert_internal(map_str_t *map, const char *key, void *value, bool fresh)
 {
-  assert(map->size <= map->capacity);
   if (map == NULL || key == NULL || value == NULL) {
     assert(false);
     return(false);
   }
+  assert(map->size <= map->capacity);
 
   bool enough_mem = true;
   if (map->data == NULL || map->capacity == 0) {
@@ -262,11 +261,11 @@ bool map_str_insert(map_str_t *map, const char *key, void *value)
  */
 bool map_str_remove(map_str_t *map, const char *key, void (*item_free)(void*))
 {
-  assert(map->size <= map->capacity);
   if (map == NULL || key == NULL) {
     assert(false);
     return(false);
   }
+  assert(map->size <= map->capacity);
 
   if (map->data == NULL || map->capacity == 0) {
     return(false);
@@ -319,14 +318,14 @@ bool map_str_remove(map_str_t *map, const char *key, void (*item_free)(void*))
  */
 map_str_bucket_t* map_str_next(const map_str_t *map, map_str_iterator_t *it)
 {
-  assert(map != NULL);
-  assert(map->size <= map->capacity);
-  assert(it != NULL);
-  assert(it->pos < map->capacity);
-  assert(it->num <= map->size);
-  if (map == NULL || it == NULL || it->num > (it->pos+1) || it->pos >= map->capacity || it->num >= map->size) {
+  if (map == NULL || it == NULL) {
+    assert(false);
     return(NULL);
   }
+  if (it->num > (it->pos+1) || it->pos >= map->capacity || it->num >= map->size) {
+    return(NULL);
+  }
+  assert(map->size <= map->capacity);
 
   for(uint32_t i=it->pos+(it->num==0?0:1); i<map->capacity; i++) {
     if (map->data[i].value != NULL) {
