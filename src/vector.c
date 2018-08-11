@@ -173,8 +173,11 @@ int vector_remove(vector_t *vector, int pos, void (*item_free)(void *))
     assert(false);
     return(1);
   }
+  if (vector->data == NULL || vector->size == 0) {
+    return(1);
+  }
 
-  if (vector->data != NULL && item_free != NULL) {
+  if (item_free != NULL) {
     item_free(vector->data[pos]);
   }
 

@@ -49,7 +49,7 @@
 volatile sig_atomic_t keep_running = 1;
 volatile pthread_t *thread1 = NULL;
 int loglevel = LOG_INFO;
-int rc = EXIT_SUCCESS;
+int return_code = EXIT_SUCCESS;
 
 /**************************************************************************//**
  * @brief Force exit sending a signal to monitor thread.
@@ -59,7 +59,7 @@ void terminate(int exitcode)
 {
   if (keep_running > 0 && thread1 != NULL) {
     pthread_kill(*thread1, SIGINT);
-    rc = exitcode;
+    return_code = exitcode;
   }
 }
 
@@ -167,8 +167,8 @@ int run(const char *filename, bool daemonize, bool seek0)
   pthread_t thread_database;
 
   // read configuration file
-  rc = init_config(&cfg, filename);
-  if (rc != EXIT_SUCCESS) {
+  return_code = init_config(&cfg, filename);
+  if (return_code != EXIT_SUCCESS) {
     goto run_exit;
   }
 
@@ -178,39 +178,39 @@ int run(const char *filename, bool daemonize, bool seek0)
   loglevel = log.level;
 
   // initialize message queue between monitor-processor
-  rc = mqueue_init(&mqueue1, "mqueue1", 0);
-  if (rc != EXIT_SUCCESS) {
-    syslog(LOG_CRIT, "error creating message queue monitor->processor (%d)", rc);
+  return_code = mqueue_init(&mqueue1, "mqueue1", 0);
+  if (return_code != EXIT_SUCCESS) {
+    syslog(LOG_CRIT, "error creating message queue monitor->processor (%d)", return_code);
     goto run_exit;
   }
 
   // initialize message queue between processor-database
-  rc = mqueue_init(&mqueue2, "mqueue2", QUEUE2_MAX_CAPACITY);
-  if (rc != EXIT_SUCCESS) {
-    syslog(LOG_CRIT, "error creating message queue processor->database (%d)", rc);
+  return_code = mqueue_init(&mqueue2, "mqueue2", QUEUE2_MAX_CAPACITY);
+  if (return_code != EXIT_SUCCESS) {
+    syslog(LOG_CRIT, "error creating message queue processor->database (%d)", return_code);
     goto run_exit;
   }
 
   // initializations
-  rc |= formats_init(&formats, &cfg);
-  rc |= tables_init(&tables, &cfg);
-  rc |= dirs_init(&dirs, &cfg, &formats, &tables);
-  rc |= database_init(&database, &cfg, &tables, &mqueue2);
+  return_code |= formats_init(&formats, &cfg);
+  return_code |= tables_init(&tables, &cfg);
+  return_code |= dirs_init(&dirs, &cfg, &formats, &tables);
+  return_code |= database_init(&database, &cfg, &tables, &mqueue2);
   config_destroy(&cfg);
-  if (rc != EXIT_SUCCESS) {
+  if (return_code != EXIT_SUCCESS) {
     goto run_exit;
   }
 
   // initialize processor object
-  rc = processor_init(&processor, &mqueue1, &mqueue2);
-  if (rc != EXIT_SUCCESS) {
+  return_code = processor_init(&processor, &mqueue1, &mqueue2);
+  if (return_code != EXIT_SUCCESS) {
     syslog(LOG_CRIT, "error initializing processor");
     goto run_exit;
   }
 
   // initialize monitor object
-  rc = monitor_init(&monitor, &dirs, &mqueue1, seek0);
-  if (rc != EXIT_SUCCESS) {
+  return_code = monitor_init(&monitor, &dirs, &mqueue1, seek0);
+  if (return_code != EXIT_SUCCESS) {
     syslog(LOG_CRIT, "error initializing monitor");
     goto run_exit;
   }
@@ -223,20 +223,20 @@ int run(const char *filename, bool daemonize, bool seek0)
   // catching interruptions like ctrl-C
   set_signal_handlers();
 
-  rc = pthread_create(&thread_database, NULL, database_run, &database);
-  if (rc != EXIT_SUCCESS) {
+  return_code = pthread_create(&thread_database, NULL, database_run, &database);
+  if (return_code != EXIT_SUCCESS) {
     syslog(LOG_ERR, "Error creating database thread");
     goto run_exit;
   }
 
-  rc = pthread_create(&thread_processor, NULL, processor_run, &processor);
-  if (rc != EXIT_SUCCESS) {
+  return_code = pthread_create(&thread_processor, NULL, processor_run, &processor);
+  if (return_code != EXIT_SUCCESS) {
     syslog(LOG_ERR, "Error creating processor thread");
     goto run_exit;
   }
 
-  rc = pthread_create(&thread_monitor, NULL, monitor_run, &monitor);
-  if (rc != EXIT_SUCCESS) {
+  return_code = pthread_create(&thread_monitor, NULL, monitor_run, &monitor);
+  if (return_code != EXIT_SUCCESS) {
     syslog(LOG_ERR, "Error creating monitor thread");
     goto run_exit;
   }
@@ -257,9 +257,9 @@ run_exit:
   vector_reset(&dirs, dir_free);
   vector_reset(&formats, format_free);
   vector_reset(&tables, table_free);
-  syslog(LOG_INFO, "log2pg ended (rc=%d)", rc);
+  syslog(LOG_INFO, "log2pg ended (rc=%d)", return_code);
   log_reset(&log);
-  return(rc);
+  return(return_code);
 }
 
 /**************************************************************************//**

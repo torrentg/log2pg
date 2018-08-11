@@ -116,6 +116,9 @@ static int witem_init(witem_t *item, bool seek0)
   item->num_params = 0;
   if (table->parameters.size > 0) {
     item->param_pos = calloc(table->parameters.size, sizeof(size_t));
+    if (item->param_pos == NULL) {
+      return(1);
+    }
     for(size_t j=0; j<table->parameters.size; j++) {
       bool found = false;
       for(size_t i=0; i<format->parameters.size; i++) {

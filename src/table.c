@@ -201,8 +201,7 @@ static int tables_parse_item(vector_t *lst, const config_setting_t *setting)
   }
 
   // check if name exists
-  int index = vector_find(lst, name);
-  if (index >= 0) {
+  if (name != NULL && vector_find(lst, name) >= 0) {
     config_setting_t *aux = config_setting_get_member(setting, TABLE_PARAM_NAME);
     syslog(LOG_ERR, "duplicated table " TABLE_PARAM_NAME " '%s' at %s:%d.", name,
            config_setting_source_file(aux),
