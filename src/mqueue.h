@@ -60,12 +60,12 @@ typedef struct mqueue_t
   pthread_cond_t tcond2;
   //! Circular queue buffer.
   msg_t *buffer;
-  //! Circular queue first index (included).
-  size_t pos1;
-  //! Circular queue last index (included).
-  size_t pos2;
   //! Circular queue current capacity.
   size_t capacity;
+  //! Circular queue front index.
+  size_t front;
+  //! Circular queue length.
+  size_t length;
   //! Message queue maximum capacity (0=unlimited).
   size_t max_capacity;
   //! Number of received messages (push).
@@ -76,8 +76,6 @@ typedef struct mqueue_t
   size_t millis_waiting_push;
   //! Elapsed time pop waiting because queue is empty.
   size_t millis_waiting_pop;
-  //! Indicate if there are messages in the queue.
-  bool empty;
   //! Indicate if mqueue is open or closed.
   bool open;
 } mqueue_t;
@@ -85,8 +83,6 @@ typedef struct mqueue_t
 /**************************************************************************
  * Function declarations.
  */
-extern msg_t msg_create(short type, void *data);
-extern const char* msg_type_str(short type);
 extern int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity);
 extern int mqueue_push(mqueue_t *mqueue, short type, void *obj, bool unique, size_t millis);
 extern msg_t mqueue_pop(mqueue_t *mqueue, size_t millis);

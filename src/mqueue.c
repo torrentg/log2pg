@@ -41,7 +41,7 @@
  * @param[in] data Message data.
  * @return A message with the given parameters.
  */
-msg_t msg_create(short type, void *data)
+static msg_t msg_create(int type, void *data)
 {
   msg_t ret;
   ret.type = type;
@@ -54,7 +54,7 @@ msg_t msg_create(short type, void *data)
  * @param[in] type Message type.
  * @return String representing the type.
  */
-const char* msg_type_str(short type)
+static const char* msg_type_str(int type)
 {
   switch(type)
   {
@@ -82,28 +82,6 @@ const char* msg_type_str(short type)
 }
 
 /**************************************************************************//**
- * @brief Return the number of elements in the mqueue.
- * @details Caution, this function is not thread-safe.
- * @param[in] mqueue Message queue object.
- * @return Number of elements.
- */
-static size_t mqueue_size(const mqueue_t *mqueue)
-{
-  if (mqueue->empty) {
-    return(0);
-  }
-
-  int ret = (int)(mqueue->pos2) - (int)(mqueue->pos1) + 1;
-  if (ret <= 0) {
-    ret += mqueue->capacity;
-  }
-
-  assert(ret >= 0);
-  assert((size_t)(ret) <= mqueue->capacity);
-  return(ret);
-}
-
-/**************************************************************************//**
  * @brief Initialize a mqueue struct.
  * @param[in,out] mqueue Message queue object.
  * @param[in] name Message queue name (used in traces).
@@ -120,12 +98,11 @@ int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity)
   int rc = 0;
 
   mqueue->buffer = NULL;
-  mqueue->capacity = 0;
-  mqueue->pos1 = 0;
-  mqueue->pos2 = 0;
   mqueue->max_capacity = max_capacity;
+  mqueue->capacity = 0U;
+  mqueue->front = 0U;
+  mqueue->length = 0U;
   mqueue->open = false;
-  mqueue->empty = true;
   mqueue->num_incoming_msgs = 0U;
   mqueue->num_delivered_msgs = 0U;
   mqueue->millis_waiting_push = 0U;
@@ -152,15 +129,13 @@ int mqueue_init(mqueue_t *mqueue, const char *name, size_t max_capacity)
     goto mqueue_init_err4;
   }
 
-  size_t initial_capacity = (max_capacity==0?INITIAL_CAPACITY:MIN(max_capacity, INITIAL_CAPACITY));
-  mqueue->buffer = (msg_t *) calloc(initial_capacity, sizeof(msg_t));
+  mqueue->capacity = (max_capacity==0?INITIAL_CAPACITY:MIN(max_capacity, INITIAL_CAPACITY));
+  mqueue->buffer = (msg_t *) calloc(mqueue->capacity, sizeof(msg_t));
   if (mqueue->buffer == NULL) {
     rc = 1;
     goto mqueue_init_err5;
   }
 
-  mqueue->pos2 = initial_capacity-1;
-  mqueue->capacity = initial_capacity;
   mqueue->open = true;
   syslog(LOG_DEBUG, "mqueue - %s initialized", mqueue->name);
   return(0);
@@ -194,9 +169,9 @@ void mqueue_reset(mqueue_t *mqueue, void (*item_free)(void*))
 
   // free objects (only if item_free not NULL)
   if (mqueue->buffer != NULL && item_free != NULL) {
-    size_t len = mqueue_size(mqueue);
-    for(size_t i=0; i<=len; i++) {
-      size_t pos = (mqueue->pos1+i)%(mqueue->capacity);
+    size_t len = mqueue->length;
+    for(size_t i=0; i<len; i++) {
+      size_t pos = (mqueue->front+i)%(mqueue->capacity);
       item_free(mqueue->buffer[pos].data);
       mqueue->buffer[pos].data = NULL;
     }
@@ -204,11 +179,10 @@ void mqueue_reset(mqueue_t *mqueue, void (*item_free)(void*))
   free(mqueue->buffer);
   mqueue->buffer = NULL;
   mqueue->capacity = 0;
-  mqueue->pos1 = 0;
-  mqueue->pos2 = 0;
+  mqueue->front = 0;
+  mqueue->length = 0;
   mqueue->max_capacity = 0;
   mqueue->open = false;
-  mqueue->empty = true;
   mqueue->num_incoming_msgs = 0U;
   mqueue->num_delivered_msgs = 0U;
   mqueue->millis_waiting_push = 0U;
@@ -217,6 +191,7 @@ void mqueue_reset(mqueue_t *mqueue, void (*item_free)(void*))
   pthread_cond_destroy(&(mqueue->tcond2));
   pthread_mutex_destroy(&(mqueue->mutex));
   free(mqueue->name);
+  mqueue->name = NULL;
 }
 
 /**************************************************************************//**
@@ -243,16 +218,16 @@ static int mqueue_resize(mqueue_t *mqueue)
     return(1);
   }
 
-  size_t len = mqueue_size(mqueue);
+  size_t len = mqueue->length;
   for(size_t i=0; i<len; i++) {
-    size_t pos = (mqueue->pos1+i)%(mqueue->capacity);
+    size_t pos = (mqueue->front+i)%(mqueue->capacity);
     new_buffer[i] = mqueue->buffer[pos];
   }
 
   syslog(LOG_DEBUG, "mqueue - %s resized [%zu -> %zu]", mqueue->name, mqueue->capacity, new_capacity);
 
-  mqueue->pos1 = 0;
-  mqueue->pos2 = len-1;
+  mqueue->front = 0;
+  mqueue->length = len;
   free(mqueue->buffer);
   mqueue->buffer = new_buffer;
   mqueue->capacity = new_capacity;
@@ -328,10 +303,10 @@ static int mqueue_cond_wait(pthread_cond_t *tcond, pthread_mutex_t *mutex, struc
 static int mqueue_update_msg_type(const mqueue_t *mqueue, void *obj, short type)
 {
   int ret = 0;
-  size_t len = mqueue_size(mqueue);
+  size_t len = mqueue->length;
 
-  for(size_t i=0; i<=len; i++) {
-    size_t pos = (mqueue->pos1+i)%(mqueue->capacity);
+  for(size_t i=0; i<len; i++) {
+    size_t pos = (mqueue->front+i)%(mqueue->capacity);
     if (mqueue->buffer[pos].data == obj) {
       mqueue->buffer[pos].type = type;
       ret++;
@@ -381,7 +356,7 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
 
   pthread_mutex_lock(&(mqueue->mutex));
   while (rc == 0 && mqueue->open &&
-         mqueue->max_capacity > 0 && mqueue_size(mqueue) >= mqueue->max_capacity) {
+         mqueue->max_capacity > 0 && mqueue->length >= mqueue->max_capacity) {
     rc = mqueue_cond_wait(&(mqueue->tcond2), &(mqueue->mutex), pts);
   }
 
@@ -400,7 +375,7 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
   }
 
   // if mqueue is full then increase capacity
-  if (mqueue_size(mqueue) >= mqueue->capacity) {
+  if (mqueue->length >= mqueue->capacity) {
     rc = mqueue_resize(mqueue);
     if (rc != 0) {
       rc = MSG_TYPE_ERROR;
@@ -408,20 +383,16 @@ static inline int mqueue_push_int(mqueue_t *mqueue, short type, void *obj, bool 
     }
   }
 
-  // add obj to mqueue
-  if (mqueue->empty) {
-    mqueue->pos1 = 0;
-    mqueue->pos2 = 0;
-    mqueue->buffer[0].type = type;
-    mqueue->buffer[0].data = obj;
-    mqueue->empty = false;
-  }
-  else {
-    mqueue->pos2 = (mqueue->pos2+1)%(mqueue->capacity);
-    mqueue->buffer[mqueue->pos2].type = type;
-    mqueue->buffer[mqueue->pos2].data = obj;
+  // reassign front (not stricly necessary)
+  if (mqueue->length == 0) {
+    mqueue->front = 0;
   }
 
+  // copy new message in queue
+  size_t pos = (mqueue->front+mqueue->length)%(mqueue->capacity);
+  mqueue->buffer[pos].type = type;
+  mqueue->buffer[pos].data = obj;
+  mqueue->length++;
   mqueue->num_incoming_msgs++;
   rc = 0;
 
@@ -495,7 +466,7 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
   }
 
   pthread_mutex_lock(&(mqueue->mutex));
-  while (rc == 0 && mqueue->open && mqueue_size(mqueue) == 0) {
+  while (rc == 0 && mqueue->open && mqueue->length == 0) {
     rc = mqueue_cond_wait(&(mqueue->tcond1), &(mqueue->mutex), pts);
   }
 
@@ -508,17 +479,17 @@ static inline msg_t mqueue_pop_int(mqueue_t *mqueue, size_t millis)
     goto mqueue_pop_exit;
   }
 
-  ret = mqueue->buffer[mqueue->pos1];
-  mqueue->buffer[mqueue->pos1].type = MSG_TYPE_NULL;
-  mqueue->buffer[mqueue->pos1].data = NULL;
+  // retrieve message
+  assert(mqueue->length > 0);
+  ret = mqueue->buffer[mqueue->front];
 
-  if (mqueue->pos1 == mqueue->pos2) {
-    mqueue->empty = true;
-  }
-  else {
-    mqueue->pos1 = (mqueue->pos1+1)%(mqueue->capacity);
-  }
+  // reset slot (not strictly necessary)
+  mqueue->buffer[mqueue->front].type = MSG_TYPE_NULL;
+  mqueue->buffer[mqueue->front].data = NULL;
 
+  // update front and counters
+  mqueue->front = (mqueue->front+1)%mqueue->capacity;
+  mqueue->length--;
   mqueue->num_delivered_msgs++;
 
 mqueue_pop_exit:

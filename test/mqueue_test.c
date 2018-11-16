@@ -16,20 +16,6 @@
 int loglevel = 0;
 int value = 9999;
 
-size_t mqueue_size(const mqueue_t *mqueue)
-{
-  if (mqueue->empty) {
-    return(0);
-  }
-  
-  int ret = (int)(mqueue->pos2) - (int)(mqueue->pos1) + 1;
-  if (ret <= 0) {
-    ret += mqueue->capacity;
-  }
-  
-  return(ret);
-}
-
 void print_mqueue(mqueue_t *mqueue, const char *msg)
 {
   printf("%s = [buffer=", msg);
@@ -37,8 +23,8 @@ void print_mqueue(mqueue_t *mqueue, const char *msg)
     if (mqueue->buffer[i].data == NULL) printf("-,");
     else printf("%d,", *((int *)mqueue->buffer[i].data));
   }
-  printf("; pos1=%zu; pos2=%zu; open=%s; size=%zu]\n", 
-         mqueue->pos1, mqueue->pos2, (mqueue->open?"true":"false"), mqueue_size(mqueue));
+  printf("; front=%zu; length=%zu; open=%s]\n", 
+         mqueue->front, mqueue->length, (mqueue->open?"true":"false"));
 }
 
 // test mqueue without blocks
@@ -67,15 +53,15 @@ void test1()
   
   print_mqueue(&mqueue, "data2");
   assert(mqueue.capacity == 16);
-  assert(mqueue_size(&mqueue)==10);
+  assert(mqueue.length == 10);
   
   msg = mqueue_pop(&mqueue, 0);
   assert(msg.data == &(items[0]));
-  assert(mqueue_size(&mqueue)==9);
+  assert(mqueue.length == 9);
 
   msg = mqueue_pop(&mqueue, 0);
   assert(msg.data == &(items[1]));
-  assert(mqueue_size(&mqueue)==8);
+  assert(mqueue.length == 8);
   
   print_mqueue(&mqueue, "data3");
 
@@ -85,8 +71,8 @@ void test1()
   }
 
   print_mqueue(&mqueue, "data4");
-  assert(mqueue.pos1 == 0);
-  assert(mqueue_size(&mqueue)==22);
+  assert(mqueue.front == 0);
+  assert(mqueue.length == 22);
 
   for(int i=0; i<10; i++) {
     msg = mqueue_pop(&mqueue, 0);
@@ -127,8 +113,7 @@ void* test2_producer(void *ptr)
   mqueue_t *mqueue = (mqueue_t *) ptr;
   for(size_t i=0; i<18; i++) {
     mqueue_push(mqueue, MSG_TYPE_FILE0, &value, false, 0);
-    size_t size = mqueue_size(mqueue);
-    printf("producer push(%zu), size=%zu\n", i+1, size);
+    printf("producer push(%zu), size=%zu\n", i+1, mqueue->length);
   }
   mqueue_close(mqueue);
   return(NULL);
@@ -140,8 +125,7 @@ void* test2_consumer(void *ptr)
   for(size_t i=0; i<18; i++) {
     sleep(1);
     msg_t msg = mqueue_pop(mqueue, 0);
-    size_t size = mqueue_size(mqueue);
-    printf("consumer pop(%zu), size=%zu\n", i+1, size);
+    printf("consumer pop(%zu), size=%zu\n", i+1, mqueue->length);
     if (msg.type == MSG_TYPE_CLOSE) break;
   }
   return(NULL);
@@ -171,8 +155,7 @@ void* test3_producer(void *ptr)
   for(size_t i=0; i<18; i++) {
     sleep(1);
     mqueue_push(mqueue, MSG_TYPE_FILE0, &value, false, 0);
-    size_t size = mqueue_size(mqueue);
-    printf("producer push(%zu), size=%zu\n", i+1, size);
+    printf("producer push(%zu), size=%zu\n", i+1, mqueue->length);
   }
   return(NULL);
 }
@@ -182,8 +165,7 @@ void* test3_consumer(void *ptr)
   mqueue_t *mqueue = (mqueue_t *) ptr;
   for(size_t i=0; i<18; i++) {
     msg_t msg = mqueue_pop(mqueue, 0);
-    size_t size = mqueue_size(mqueue);
-    printf("consumer pop(%zu), size=%zu\n", i+1, size);
+    printf("consumer pop(%zu), size=%zu\n", i+1, mqueue->length);
     if (msg.type == MSG_TYPE_CLOSE) break;
   }
   return(NULL);
